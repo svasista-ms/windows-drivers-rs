@@ -23,10 +23,13 @@ use clap::{Args, Parser};
 
 use crate::{
     metadata,
-    utils::{detect_wdk_content_root, get_latest_windows_sdk_version, PathExt},
+    utils::{self, detect_wdk_content_root, get_latest_windows_sdk_version, PathExt},
     ConfigError,
     CpuArchitecture,
 };
+
+use core::ops::RangeFrom;
+const MISSING_SAMPLE_FLAG_WDK_BUILD_NUMBER_RANGE: RangeFrom<u32> = 25798..;
 
 /// The filename of the main makefile for Rust Windows drivers.
 pub const RUST_DRIVER_MAKEFILE_NAME: &str = "rust-driver-makefile.toml";
@@ -1050,6 +1053,25 @@ where
     env_var_value.push(';');
     env_var_value.push_str(env::var(env_var_name).unwrap_or_default().as_str());
     env::set_var(env_var_name, env_var_value);
+}
+
+/// Condition script for the `infverif_condition_script` task.
+///
+/// # Errors
+///
+/// This function returns an error if the WDK build version is bugged and does not contain the `/samples` flag for InfVerif.
+pub fn infverif_condition_script() -> anyhow::Result<()> {
+    condition_script(|| {
+        let wdk_version = std::env::var(WDK_VERSION_ENV_VAR)
+            .expect("WDK_BUILD_DETECTED_VERSION should always be set by wdk-build-init cargo make task");
+        let wdk_build_number = str::parse::<u32>(&utils::get_wdk_version_number(&wdk_version).unwrap())
+            .expect(&format!("Couldn't parse WDK version number!  Version number: {}", wdk_version));
+        if MISSING_SAMPLE_FLAG_WDK_BUILD_NUMBER_RANGE.contains(&wdk_build_number) {
+            // cargo_make will interpret returning an error from the rust-script condition_script as skipping the task
+            return Err(anyhow::anyhow!(format!("Skipping InfVerif. InfVerif in WDK Build {wdk_build_number} is bugged and does not contain the /samples flag.")));
+        }
+        Ok(())
+    })
 }
 
 #[cfg(test)]
