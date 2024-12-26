@@ -717,6 +717,9 @@ impl Config {
                 println!("cargo::rustc-link-lib=static=WdfLdr");
                 println!("cargo::rustc-link-lib=static=WdfDriverEntry");
 
+                // Wpptracing library
+                println!("cargo::rustc-link-lib=static=WppRecorder");
+
                 // Linker arguments derived from WindowsDriver.KernelMode.props in Ni(22H2) WDK
                 println!("cargo::rustc-cdylib-link-arg=/DRIVER");
                 println!("cargo::rustc-cdylib-link-arg=/NODEFAULTLIB");
@@ -734,9 +737,12 @@ impl Config {
                     println!("cargo::rustc-link-lib=static=ntdll");
                 }
 
+                println!("cargo::rustc-link-lib=static=OneCoreUAP");
+                
+                // Wpptracing library
+                println!("cargo::rustc-link-lib=static=WppRecorderum");
                 println!("cargo::rustc-cdylib-link-arg=/NODEFAULTLIB:kernel32.lib");
                 println!("cargo::rustc-cdylib-link-arg=/NODEFAULTLIB:user32.lib");
-                println!("cargo::rustc-link-lib=static=OneCoreUAP");
 
                 // Linker arguments derived from WindowsDriver.UserMode.props in Ni(22H2) WDK
                 println!("cargo::rustc-cdylib-link-arg=/SUBSYSTEM:WINDOWS");
