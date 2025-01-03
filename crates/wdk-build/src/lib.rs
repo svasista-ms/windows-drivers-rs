@@ -881,9 +881,7 @@ impl CpuArchitecture {
 pub fn find_top_level_cargo_manifest() -> PathBuf {
     println!("In wdk-build OUT_DIR={}", env::var("OUT_DIR").unwrap());
     let out_dir =
-        PathBuf::from(std::env::var("OUT_DIR").expect(
-            "Cargo should have set the OUT_DIR environment variable when executing build.rs",
-        ));
+        PathBuf::from(std::env::var("OUT_DIR").unwrap_or("".to_string())).canonicalize().unwrap();
 
     out_dir
         .ancestors()
