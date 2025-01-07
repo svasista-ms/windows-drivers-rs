@@ -253,38 +253,38 @@ impl Config {
         })
     }
 
-    // /// Create a [`Config`] from parsing the Cargo manifest at the given path
-    // /// 
-    // /// # Errors
-    // /// 
-    // /// # Panics
-    // /// If "Cargo.toml" doesn't exist in the given path
-    // pub fn from_manifest_path<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
-    //     let path = path.as_ref();
-    //     let top_level_manifest = path.join("Cargo.toml");
-    //     let cargo_metadata = MetadataCommand::new()
-    //         .manifest_path(&top_level_manifest)
-    //         .exec()?;
-    //     let wdk_metadata = metadata::Wdk::try_from(&cargo_metadata)?;
+    /// Create a [`Config`] from parsing the Cargo manifest at the given path
+    /// 
+    /// # Errors
+    /// 
+    /// # Panics
+    /// If "Cargo.toml" doesn't exist in the given path
+    pub fn from_manifest_path<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
+        let path = path.as_ref();
+        let top_level_manifest = path.join("Cargo.toml");
+        let cargo_metadata = MetadataCommand::new()
+            .manifest_path(&top_level_manifest)
+            .exec()?;
+        let wdk_metadata = metadata::Wdk::try_from(&cargo_metadata)?;
 
-    //     // Force rebuilds if any of the manifest files change (ex. if wdk metadata
-    //     // section is modified)
-    //     for manifest_path in metadata::iter_manifest_paths(cargo_metadata)
-    //         .into_iter()
-    //         .chain(std::iter::once(
-    //             top_level_manifest
-    //                 .try_into()
-    //                 .expect("Path to Cargo manifests should always be valid UTF8"),
-    //         ))
-    //     {
-    //         println!("cargo:rerun-if-changed={manifest_path}");
-    //     }
+        // Force rebuilds if any of the manifest files change (ex. if wdk metadata
+        // section is modified)
+        for manifest_path in metadata::iter_manifest_paths(cargo_metadata)
+            .into_iter()
+            .chain(std::iter::once(
+                top_level_manifest
+                    .try_into()
+                    .expect("Path to Cargo manifests should always be valid UTF8"),
+            ))
+        {
+            println!("cargo:rerun-if-changed={manifest_path}");
+        }
 
-    //     Ok(Self {
-    //         driver_config: wdk_metadata.driver_model,
-    //         ..Default::default()
-    //     })
-    // }
+        Ok(Self {
+            driver_config: wdk_metadata.driver_model,
+            ..Default::default()
+        })
+    }
 
     fn emit_check_cfg_settings() {
         for (cfg_key, allowed_values) in EXPORTED_CFG_SETTINGS.iter() {
@@ -913,7 +913,9 @@ impl CpuArchitecture {
 #[must_use]
 pub fn find_top_level_cargo_manifest() -> PathBuf {
     let out_dir =
-        PathBuf::from(std::env::var("OUT_DIR").unwrap_or("".to_string())).canonicalize().unwrap();
+        PathBuf::from(std::env::var("OUT_DIR").expect(
+            "Cargo should have set the OUT_DIR environment variable when executing build.rs",
+        ));
 
     out_dir
         .ancestors()
