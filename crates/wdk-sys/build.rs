@@ -376,7 +376,7 @@ fn main() -> anyhow::Result<()> {
 
     configure_wdk_library_build_and_then(|config| {
         let out_path = PathBuf::from(
-            env::var("OUT_DIR").expect("OUT_DIR should be exist in Cargo build environment"),
+            env::var("OUT_DIR").expect("OUT_DIR should exist in a Cargo build environment"),
         );
 
         thread::scope(|thread_scope| {
