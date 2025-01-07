@@ -82,10 +82,10 @@ pub enum TryFromCargoMetadataError {
     },
 }
 
-impl TryFrom<&Metadata> for Wdk {
+impl TryFrom<&cargo_metadata::Metadata> for Wdk {
     type Error = TryFromCargoMetadataError;
 
-    fn try_from(metadata: &Metadata) -> std::result::Result<Self, Self::Error> {
+    fn try_from(metadata: &cargo_metadata::Metadata) -> std::result::Result<Self, Self::Error> {
         let wdk_metadata_configurations = {
             // Parse WDK metadata from workspace and all packages
             let mut configs = parse_packages_wdk_metadata(&metadata.packages)?;
