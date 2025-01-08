@@ -175,7 +175,7 @@ pub(crate) fn iter_manifest_paths(metadata: Metadata) -> impl IntoIterator<Item 
 }
 
 /// Get the cargo metadata at a given path
-pub fn get_cargo_metadata_at_path(manifest_path: PathBuf) -> cargo_metadata::Result<Metadata> {
+pub fn get_cargo_metadata_at_path(manifest_path: &PathBuf) -> cargo_metadata::Result<Metadata> {
     cargo_metadata::MetadataCommand::new()
     .manifest_path(&manifest_path)
     .exec()
