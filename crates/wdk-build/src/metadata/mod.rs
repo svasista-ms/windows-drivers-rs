@@ -18,7 +18,7 @@ pub(crate) mod ser;
 mod error;
 mod map;
 
-use std::collections::HashSet;
+use std::{collections::HashSet, path::PathBuf};
 
 use camino::Utf8PathBuf;
 use cargo_metadata::Metadata;
@@ -82,10 +82,10 @@ pub enum TryFromCargoMetadataError {
     },
 }
 
-impl TryFrom<&cargo_metadata::Metadata> for Wdk {
+impl TryFrom<&Metadata> for Wdk {
     type Error = TryFromCargoMetadataError;
 
-    fn try_from(metadata: &cargo_metadata::Metadata) -> std::result::Result<Self, Self::Error> {
+    fn try_from(metadata: &Metadata) -> std::result::Result<Self, Self::Error> {
         let wdk_metadata_configurations = {
             // Parse WDK metadata from workspace and all packages
             let mut configs = parse_packages_wdk_metadata(&metadata.packages)?;
@@ -172,4 +172,11 @@ pub(crate) fn iter_manifest_paths(metadata: Metadata) -> impl IntoIterator<Item 
     cargo_manifest_paths.insert(workspace_manifest_path);
 
     cargo_manifest_paths
+}
+
+/// Get the cargo metadata at a given path
+pub fn get_cargo_metadata_at_path(manifest_path: PathBuf) -> cargo_metadata::Result<Metadata> {
+    cargo_metadata::MetadataCommand::new()
+    .manifest_path(&manifest_path)
+    .exec()
 }
