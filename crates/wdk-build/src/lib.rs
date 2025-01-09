@@ -1029,19 +1029,18 @@ lazy_static::lazy_static! {
         vec![("DRIVER_MODEL-DRIVER_TYPE", vec!["WDM", "KMDF", "UMDF"])];
 }
 
-/// Attempts to detect the Windows Driver Kit (WDK) content root directory.
+/// Parses the WDK (Windows Driver Kit) version number from the detected SDK version string.
 /// 
-/// # Errors
+/// This function attempts to retrieve the WDK version number using the `utils::get_wdk_version_number`
+/// function. If successful, it parses the version number as a `u32`. If parsing fails, it panics with
+/// an error message that includes the detected SDK version.
 /// 
-/// Returns a `ConfigError::WdkContentRootDetectionError` if the WDK content root
-/// directory cannot be detected.
+/// # Panics
 /// 
-/// # Example
-/// 
-/// ```rust
-/// let wdk_content_root = detect_wdk_content_root().ok_or(ConfigError::WdkContentRootDetectionError)?;
-/// ```
-pub fn detect_wdk_version() -> Result<String, ConfigError> {
+/// This function will panic if:
+/// - The WDK version number cannot be retrieved.
+/// - The retrieved WDK version number cannot be parsed as a `u32`.
+pub fn detect_wdk_build_number() -> Result<u32, ConfigError> {
     let wdk_content_root = utils::detect_wdk_content_root().ok_or(ConfigError::WdkContentRootDetectionError)?;
     let detected_sdk_version = utils::get_latest_windows_sdk_version(&wdk_content_root.join("Lib"))?;
 
@@ -1051,7 +1050,14 @@ pub fn detect_wdk_version() -> Result<String, ConfigError> {
         });
     }
 
-    Ok(detected_sdk_version)
+    let wdk_build_number = str::parse::<u32>(
+        &utils::get_wdk_version_number(&detected_sdk_version).expect("Failed to get WDK version number"),
+    )
+    .unwrap_or_else(|_| {
+        panic!("Couldn't parse WDK version number! Version number: {detected_sdk_version}")
+    });
+
+    Ok(wdk_build_number)
 }
 
 #[cfg(test)]
