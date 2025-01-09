@@ -1029,6 +1029,31 @@ lazy_static::lazy_static! {
         vec![("DRIVER_MODEL-DRIVER_TYPE", vec!["WDM", "KMDF", "UMDF"])];
 }
 
+/// Attempts to detect the Windows Driver Kit (WDK) content root directory.
+/// 
+/// # Errors
+/// 
+/// Returns a `ConfigError::WdkContentRootDetectionError` if the WDK content root
+/// directory cannot be detected.
+/// 
+/// # Example
+/// 
+/// ```rust
+/// let wdk_content_root = detect_wdk_content_root().ok_or(ConfigError::WdkContentRootDetectionError)?;
+/// ```
+pub fn detect_wdk_version() -> Result<String, ConfigError> {
+    let wdk_content_root = utils::detect_wdk_content_root().ok_or(ConfigError::WdkContentRootDetectionError)?;
+    let detected_sdk_version = utils::get_latest_windows_sdk_version(&wdk_content_root.join("Lib"))?;
+
+    if !utils::validate_wdk_version_format(&detected_sdk_version) {
+        return Err(ConfigError::WdkVersionStringFormatError {
+            version: detected_sdk_version,
+        });
+    }
+
+    Ok(detected_sdk_version)
+}
+
 #[cfg(test)]
 mod tests {
     #[cfg(nightly_toolchain)]
