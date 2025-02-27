@@ -38,6 +38,7 @@ wdk-sys = { path = "crates/wdk-sys", version = "0.3.0" }
 # External Crates
 anyhow = "1.0.95"
 assert_cmd = "2.0.14"
+assert_fs = "1.1.2"
 bindgen = "0.69.5"
 camino = "1.1.9"
 cargo_metadata = "0.18.1"
