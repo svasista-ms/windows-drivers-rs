@@ -89,7 +89,7 @@ impl FromStr for DriverTypeArg {
 pub struct NewProjectArgs {
     #[clap(help = "Driver Project Name")]
     pub driver_project_name: ProjectNameArg,
-    #[clap(long, help = "Driver Type", index = 2, ignore_case = true)]
+    #[clap(help = "Driver Type", index = 2, ignore_case = true)]
     pub driver_type: DriverTypeArg,
     #[clap(long, help = "Path to the project", default_value = ".")]
     pub cwd: PathBuf,

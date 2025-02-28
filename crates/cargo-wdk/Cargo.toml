@@ -48,4 +48,5 @@ unescaped_backticks = "warn"
 
 [dev-dependencies]
 assert_cmd.workspace = true
+assert_fs.workspace = true
 predicates.workspace = true

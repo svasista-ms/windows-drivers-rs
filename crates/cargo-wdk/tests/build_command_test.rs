@@ -1,4 +1,4 @@
-//! Integration tests for package flow
+//! System level tests for cargo wdk build flow
 use std::{path::PathBuf, process::Command};
 
 use assert_cmd::prelude::*;
@@ -123,7 +123,10 @@ fn given_an_emulated_workspace_when_cargo_wdk_is_executed_then_all_driver_projec
     let output = cmd_assertion.get_output();
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    assert!(stdout.contains("Error packaging the child project: rust-project, error: Error Parsing WDK metadata from Cargo.toml")); // rust-project is not a driver and it is expected to fail
+    assert!(stdout.contains(
+        "Error packaging the child project: rust-project, error: Error Parsing WDK metadata from \
+         Cargo.toml"
+    )); // rust-project is not a driver and it is expected to fail
     assert!(stdout.contains("Processing completed for package: driver_1"));
     assert!(stdout.contains("Processing completed for package: driver_2"));
     assert!(stdout.contains(
@@ -156,7 +159,8 @@ fn given_an_emulated_workspace_when_cargo_wdk_is_executed_then_all_driver_projec
     )
     .exists());
     assert!(PathBuf::from(
-        "tests/emulated-workspace/umdf-driver-workspace/target/debug/driver_1_package/WDRLocalTestCert.cer"
+        "tests/emulated-workspace/umdf-driver-workspace/target/debug/driver_1_package/\
+         WDRLocalTestCert.cer"
     )
     .exists());
 
@@ -185,7 +189,8 @@ fn given_an_emulated_workspace_when_cargo_wdk_is_executed_then_all_driver_projec
     )
     .exists());
     assert!(PathBuf::from(
-        "tests/emulated-workspace/umdf-driver-workspace/target/debug/driver_2_package/WDRLocalTestCert.cer"
+        "tests/emulated-workspace/umdf-driver-workspace/target/debug/driver_2_package/\
+         WDRLocalTestCert.cer"
     )
     .exists());
 }
