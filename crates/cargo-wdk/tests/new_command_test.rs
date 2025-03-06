@@ -1,8 +1,13 @@
 //! System level tests for cargo wdk new flow
+#![allow(clippy::literal_string_with_formatting_args)]
+mod common;
 use assert_cmd::Command;
 use assert_fs::TempDir;
+use common::set_crt_static_flag;
+use serial_test::serial;
 
 #[test]
+#[serial]
 fn given_a_cargo_wdk_new_command_when_driver_type_is_kmdf_then_it_creates_valid_driver_project() {
     let (stdout, _stderr) = create_and_build_new_driver_project("kmdf");
     assert!(stdout
@@ -15,6 +20,7 @@ fn given_a_cargo_wdk_new_command_when_driver_type_is_kmdf_then_it_creates_valid_
 }
 
 #[test]
+#[serial]
 fn given_a_cargo_wdk_new_command_when_driver_type_is_umdf_then_it_creates_valid_driver_project() {
     let (stdout, _stderr) = create_and_build_new_driver_project("umdf");
     assert!(stdout
@@ -27,6 +33,7 @@ fn given_a_cargo_wdk_new_command_when_driver_type_is_umdf_then_it_creates_valid_
 }
 
 #[test]
+#[serial]
 fn given_a_cargo_wdk_new_command_when_driver_type_is_wdm_then_it_creates_valid_driver_project() {
     let (stdout, _stderr) = create_and_build_new_driver_project("wdm");
     assert!(stdout
@@ -41,7 +48,7 @@ fn given_a_cargo_wdk_new_command_when_driver_type_is_wdm_then_it_creates_valid_d
 fn create_and_build_new_driver_project(driver_type: &str) -> (String, String) {
     let driver_name = format!("test-{driver_type}-driver");
     let driver_name_underscored = driver_name.replace('-', "_");
-    let tmp_dir = TempDir::new().unwrap();
+    let tmp_dir = TempDir::new().expect("Unable to create new temp dir for test");
     println!("Temp dir: {}", tmp_dir.path().display());
     let mut cmd = Command::cargo_bin("cargo-wdk").expect("unable to find cargo-wdk binary");
     cmd.args([
@@ -82,20 +89,7 @@ fn create_and_build_new_driver_project(driver_type: &str) -> (String, String) {
         .exists());
 
     // assert if cargo wdk build works on the created driver project
-
-    // FIXME: set RUSTFLAGS to include +crt-static, this is needed for tests as
-    // "cargo make wdk-pre-commit-hook-flow" somehow messes with RUSTFLAGS
-    if let Ok(rustflags) = std::env::var("RUSTFLAGS") {
-        let updated_rust_flags = format!("{rustflags} -C target-feature=+crt-static");
-        std::env::set_var("RUSTFLAGS", updated_rust_flags);
-        println!("RUSTFLAGS set, adding the +crt-static: {rustflags:?}");
-    } else {
-        std::env::set_var("RUSTFLAGS", "-C target-feature=+crt-static");
-        println!(
-            "No RUSTFLAGS set, setting it to: {:?}",
-            std::env::var("RUSTFLAGS").expect("RUSTFLAGS not set")
-        );
-    }
+    set_crt_static_flag();
 
     let mut cmd = Command::cargo_bin("cargo-wdk").expect("unable to find cargo-wdk binary");
     cmd.args([
@@ -105,7 +99,9 @@ fn create_and_build_new_driver_project(driver_type: &str) -> (String, String) {
     ]);
 
     let cmd_assertion = cmd.assert().failure();
-    tmp_dir.close().unwrap();
+    tmp_dir
+        .close()
+        .expect("Unable to close temp dir after test");
     let output = cmd_assertion.get_output();
     let stdout: String = String::from_utf8_lossy(&output.stdout).into();
     let stderr: String = String::from_utf8_lossy(&output.stderr).into();
