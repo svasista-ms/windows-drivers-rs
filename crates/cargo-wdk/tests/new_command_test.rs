@@ -4,10 +4,8 @@ mod common;
 use assert_cmd::Command;
 use assert_fs::TempDir;
 use common::set_crt_static_flag;
-use serial_test::serial;
 
 #[test]
-#[serial]
 fn given_a_cargo_wdk_new_command_when_driver_type_is_kmdf_then_it_creates_valid_driver_project() {
     let (stdout, _stderr) = create_and_build_new_driver_project("kmdf");
     assert!(stdout
@@ -20,7 +18,6 @@ fn given_a_cargo_wdk_new_command_when_driver_type_is_kmdf_then_it_creates_valid_
 }
 
 #[test]
-#[serial]
 fn given_a_cargo_wdk_new_command_when_driver_type_is_umdf_then_it_creates_valid_driver_project() {
     let (stdout, _stderr) = create_and_build_new_driver_project("umdf");
     assert!(stdout
@@ -33,7 +30,6 @@ fn given_a_cargo_wdk_new_command_when_driver_type_is_umdf_then_it_creates_valid_
 }
 
 #[test]
-#[serial]
 fn given_a_cargo_wdk_new_command_when_driver_type_is_wdm_then_it_creates_valid_driver_project() {
     let (stdout, _stderr) = create_and_build_new_driver_project("wdm");
     assert!(stdout

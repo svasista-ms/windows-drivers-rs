@@ -4,10 +4,8 @@ use std::{path::PathBuf, process::Command};
 
 use assert_cmd::prelude::*;
 use common::set_crt_static_flag;
-use serial_test::serial;
 
 #[test]
-#[serial]
 fn given_a_mixed_package_kmdf_workspace_when_cargo_wdk_is_executed_then_driver_package_folder_is_created_with_expected_files(
 ) {
     set_crt_static_flag();
@@ -60,7 +58,6 @@ fn given_a_mixed_package_kmdf_workspace_when_cargo_wdk_is_executed_then_driver_p
 }
 
 #[test]
-#[serial]
 fn given_a_umdf_driver_when_cargo_wdk_is_executed_then_driver_package_folder_is_created_with_expected_files(
 ) {
     set_crt_static_flag();
@@ -107,7 +104,6 @@ fn given_a_umdf_driver_when_cargo_wdk_is_executed_then_driver_package_folder_is_
 }
 
 #[test]
-#[serial]
 fn given_an_emulated_workspace_when_cargo_wdk_is_executed_then_all_driver_projects_are_built_and_packaged_and_non_driver_rust_projects_failed_and_rest_ignored(
 ) {
     set_crt_static_flag();
