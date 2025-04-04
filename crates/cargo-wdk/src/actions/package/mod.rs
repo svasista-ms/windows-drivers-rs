@@ -1,12 +1,10 @@
-//! Module that initializes packaging a driver project.
-//!
-//! This module defines the `PackageAction` struct and its associated methods
+// Copyright (c) Microsoft Corporation
+// License: MIT OR Apache-2.0
+//! This module contains the `PackageAction` struct and its associated methods
 //! for orchestrating the packaging of a driver project. It includes the build
 //! step as a prerequisite for packaging. It consists the logic to build and
 //! package standalone projects, workspaces, individual members in a workspace
-//! and emulated workspaces. It handles various tasks such as creation of the
-//! `PackageDriver` struct and interacting with `wdk-build`.
-
+//! and emulated workspaces.
 #[cfg(test)]
 mod tests;
 
@@ -28,14 +26,16 @@ use package_task::{PackageTask, PackageTaskParams};
 use tracing::{debug, error as log_error, info, warn};
 use wdk_build::metadata::{TryFromCargoMetadataError, Wdk};
 
-use super::{build::BuildAction, Profile, TargetArch};
+use super::{build::BuildAction, CpuArchitecture, Profile};
+use crate::actions::{AARCH64_TARGET_TRIPLE_NAME, X86_64_TARGET_TRIPLE_NAME};
 #[double]
 use crate::providers::{exec::CommandExec, fs::Fs, metadata::Metadata, wdk_build::WdkBuild};
 
 pub struct PackageActionParams<'a> {
     pub working_dir: &'a Path,
     pub profile: Profile,
-    pub target_arch: TargetArch,
+    pub host_arch: CpuArchitecture,
+    pub target_arch: Option<CpuArchitecture>,
     pub verify_signature: bool,
     pub is_sample_class: bool,
     pub verbosity_level: clap_verbosity_flag::Verbosity,
@@ -46,7 +46,8 @@ pub struct PackageActionParams<'a> {
 pub struct PackageAction<'a> {
     working_dir: PathBuf,
     profile: Profile,
-    target_arch: TargetArch,
+    host_arch: CpuArchitecture,
+    target_arch: Option<CpuArchitecture>,
     verify_signature: bool,
     is_sample_class: bool,
     verbosity_level: clap_verbosity_flag::Verbosity,
@@ -84,22 +85,11 @@ impl<'a> PackageAction<'a> {
         metadata: &'a Metadata,
     ) -> Result<Self> {
         // TODO: validate and init attrs here
-        wdk_build::cargo_make::setup_path()?;
-        debug!("PATH env variable is set with WDK bin and tools paths");
-
-        let build_number = wdk_build_provider.detect_wdk_build_number()?;
-        info!("Detected WDK build number: {}", build_number);
-
-        debug!(
-            "Initializing packaging for project at: {}",
-            params.working_dir.display()
-        );
-        // FIXME: Canonicalizing here leads to a cargo_metadata error. Probably because
-        // it is already canonicalized, * (wild chars) won't be resolved to actual paths
         let working_dir = fs_provider.canonicalize_path(params.working_dir)?;
         Ok(Self {
             working_dir,
             profile: params.profile,
+            host_arch: params.host_arch,
             target_arch: params.target_arch,
             verify_signature: params.verify_signature,
             is_sample_class: params.is_sample_class,
@@ -136,6 +126,14 @@ impl<'a> PackageAction<'a> {
     /// * `PackageActionError::OneOrMoreRustProjectsFailedToBuild` - If one or
     ///   more Rust projects fail to build
     pub fn run(&self) -> Result<(), PackageActionError> {
+        wdk_build::cargo_make::setup_path()?;
+        debug!("PATH env variable is set with WDK bin and tools paths");
+        debug!(
+            "Initializing packaging for project at: {}",
+            self.working_dir.display()
+        );
+        let build_number = self.wdk_build_provider.detect_wdk_build_number()?;
+        debug!("WDK build number: {}", build_number);
         // Standalone driver/driver workspace support
         if self
             .fs_provider
@@ -231,9 +229,7 @@ impl<'a> PackageAction<'a> {
         working_dir: &PathBuf,
         cargo_metadata: &CargoMetadata,
     ) -> Result<(), PackageActionError> {
-        let target_directory = cargo_metadata
-            .target_directory
-            .join(self.profile.target_folder_name());
+        let target_directory = cargo_metadata.target_directory.as_std_path().to_path_buf();
         let wdk_metadata = Wdk::try_from(cargo_metadata);
         let workspace_packages = cargo_metadata.workspace_packages();
         let workspace_root = self
@@ -241,7 +237,6 @@ impl<'a> PackageAction<'a> {
             .canonicalize_path(cargo_metadata.workspace_root.clone().as_std_path())?;
         if workspace_root.eq(working_dir) {
             debug!("Running from workspace root");
-            let target_directory: PathBuf = target_directory.into();
             for package in workspace_packages {
                 let package_root_path: PathBuf = package
                     .manifest_path
@@ -297,7 +292,7 @@ impl<'a> PackageAction<'a> {
             &wdk_metadata,
             package,
             package.name.clone(),
-            target_directory.as_std_path(),
+            &target_directory,
         )?;
 
         if let Err(e) = wdk_metadata {
@@ -333,11 +328,13 @@ impl<'a> PackageAction<'a> {
             &package_name,
             working_dir,
             &self.profile,
+            self.target_arch,
             self.verbosity_level,
             self.command_exec,
             self.fs_provider,
         )?
         .run()?;
+
         if package.metadata.get("wdk").is_none() {
             warn!(
                 "No package.metadata.wdk section found. Skipping driver package workflow for \
@@ -357,19 +354,36 @@ impl<'a> PackageAction<'a> {
             );
             return Ok(());
         }
+        debug!("Found wdk metadata in package: {}", package_name);
 
+        let mut target_dir = match self.target_arch {
+            Some(CpuArchitecture::Amd64) => target_dir.join(X86_64_TARGET_TRIPLE_NAME),
+            Some(CpuArchitecture::Arm64) => target_dir.join(AARCH64_TARGET_TRIPLE_NAME),
+            None => target_dir.to_path_buf(),
+        };
+        target_dir = target_dir.join(self.profile.target_folder_name());
+        debug!(
+            "Target directory for package: {} is: {}",
+            package_name,
+            target_dir.display()
+        );
+        let target_arch = self.target_arch.unwrap_or(self.host_arch);
+        debug!(
+            "Target architecture for package: {} is: {}",
+            package_name, target_arch
+        );
+        debug!("Creating package driver for package: {}", package_name);
         if wdk_metadata.is_err() {
             return Ok(());
         }
 
         let wdk_metadata = wdk_metadata.as_ref().expect("WDK metadata cannot be empty");
-
         let package_driver = PackageTask::new(
             PackageTaskParams {
                 package_name: &package_name,
                 working_dir,
-                target_dir,
-                target_arch: self.target_arch,
+                target_dir: &target_dir,
+                target_arch,
                 verify_signature: self.verify_signature,
                 sample_class: self.is_sample_class,
                 driver_model: wdk_metadata.driver_model.clone(),

@@ -17,7 +17,7 @@ use tracing::{debug, info};
 use wdk_build::DriverConfig;
 
 use super::error::PackageTaskError;
-use crate::actions::TargetArch;
+use crate::actions::CpuArchitecture;
 #[double]
 use crate::providers::{exec::CommandExec, fs::Fs, wdk_build::WdkBuild};
 
@@ -32,7 +32,7 @@ pub struct PackageTaskParams<'a> {
     pub package_name: &'a str,
     pub working_dir: &'a Path,
     pub target_dir: &'a Path,
-    pub target_arch: TargetArch,
+    pub target_arch: CpuArchitecture,
     pub verify_signature: bool,
     pub sample_class: bool,
     pub driver_model: DriverConfig,
@@ -140,13 +140,12 @@ impl<'a> PackageTask<'a> {
         }
 
         let arch = match params.target_arch {
-            TargetArch::X64 => "amd64",
-            TargetArch::Arm64 => "arm64",
+            CpuArchitecture::Amd64 => "amd64",
+            CpuArchitecture::Arm64 => "arm64",
         };
-
         let os_mapping = match params.target_arch {
-            TargetArch::X64 => "10_x64",
-            TargetArch::Arm64 => "Server10_arm64",
+            CpuArchitecture::Amd64 => "10_x64",
+            CpuArchitecture::Arm64 => "Server10_arm64",
         };
 
         Ok(Self {

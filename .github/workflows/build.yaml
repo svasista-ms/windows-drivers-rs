@@ -38,7 +38,7 @@ jobs:
           - aarch64-pc-windows-msvc
 
         target_arch:
-          - x64
+          - amd64
           - arm64
 
     steps:
