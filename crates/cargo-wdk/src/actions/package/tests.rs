@@ -1354,6 +1354,179 @@ pub fn given_a_invalid_driver_project_with_partial_wdk_metadata_when_valid_defau
     ));
 }
 
+#[test]
+fn given_a_driver_project_and_rustup_toolchain_env_is_not_set_package_fails() {
+    // Input CLI args
+    let cwd = PathBuf::from("C:\\tmp\\sample-driver");
+    let profile = None;
+    let target_arch = None;
+    let verify_signature = true;
+    let sample_class = false;
+
+    // Driver project data
+    let driver_name = "sample-driver";
+    let cargo_toml_metadata = invalid_driver_cargo_toml();
+
+    // Store current val of RUSTUP_TOOLCHAIN and remove it for the test
+    let rustup_toolchain_env =
+        std::env::var("RUSTUP_TOOLCHAIN").expect("Failed to get RUSTUP_TOOLCHAIN in the tests");
+    std::env::remove_var("RUSTUP_TOOLCHAIN");
+
+    let package_project = TestPackageAction::new(cwd.clone(), profile, target_arch, sample_class);
+    let package_project_action = package_project
+        .set_up_with_custom_toml(&cargo_toml_metadata)
+        .expect_detect_wdk_build_number(25100u32)
+        .expect_root_manifest_exists(&cwd, true)
+        .expect_path_canonicalization_cwd()
+        .expect_path_canonicalization_workspace_root()
+        .expect_path_canonicalization_all_package_roots()
+        .expect_path_canonicalization_package_manifest_path(&cwd)
+        .expect_cargo_build(driver_name, &cwd, None);
+
+    let package_project = PackageAction::new(
+        &PackageActionParams {
+            working_dir: &cwd,
+            profile: profile.as_ref(),
+            target_arch: target_arch.as_ref(),
+            verify_signature,
+            is_sample_class: sample_class,
+            verbosity_level: clap_verbosity_flag::Verbosity::new(1, 0),
+        },
+        package_project_action.mock_wdk_build_provider(),
+        package_project_action.mock_run_command(),
+        package_project_action.mock_fs_provider(),
+        package_project_action.mock_metadata_provider(),
+    );
+    assert!(package_project.is_ok());
+
+    let run_result = package_project
+        .expect("Failed to init package action")
+        .run();
+    assert!(matches!(
+        run_result.as_ref().expect_err("expected error"),
+        PackageActionError::UnableToReadRustupToolchainEnv(_)
+    ));
+
+    // Restore original value of RUSTUP_TOOLCHAIN
+    std::env::set_var("RUSTUP_TOOLCHAIN", rustup_toolchain_env);
+}
+
+#[test]
+fn given_a_driver_project_and_rustup_toolchain_is_set_to_unsupported_arch_package_fails() {
+    // Input CLI args
+    let cwd = PathBuf::from("C:\\tmp\\sample-driver");
+    let profile = None;
+    let target_arch = None;
+    let verify_signature = true;
+    let sample_class = false;
+
+    // Driver project data
+    let driver_name = "sample-driver";
+    let cargo_toml_metadata = invalid_driver_cargo_toml();
+
+    // Store current val of RUSTUP_TOOLCHAIN and set it to unsupported arch for the
+    // test
+    let rustup_toolchain_env =
+        std::env::var("RUSTUP_TOOLCHAIN").expect("Failed to get RUSTUP_TOOLCHAIN in the tests");
+    std::env::set_var("RUSTUP_TOOLCHAIN", "unsupported-arch");
+
+    let package_project = TestPackageAction::new(cwd.clone(), profile, target_arch, sample_class);
+    let package_project_action = package_project
+        .set_up_with_custom_toml(&cargo_toml_metadata)
+        .expect_detect_wdk_build_number(25100u32)
+        .expect_root_manifest_exists(&cwd, true)
+        .expect_path_canonicalization_cwd()
+        .expect_path_canonicalization_workspace_root()
+        .expect_path_canonicalization_all_package_roots()
+        .expect_path_canonicalization_package_manifest_path(&cwd)
+        .expect_cargo_build(driver_name, &cwd, None);
+
+    let package_project = PackageAction::new(
+        &PackageActionParams {
+            working_dir: &cwd,
+            profile: profile.as_ref(),
+            target_arch: target_arch.as_ref(),
+            verify_signature,
+            is_sample_class: sample_class,
+            verbosity_level: clap_verbosity_flag::Verbosity::new(1, 0),
+        },
+        package_project_action.mock_wdk_build_provider(),
+        package_project_action.mock_run_command(),
+        package_project_action.mock_fs_provider(),
+        package_project_action.mock_metadata_provider(),
+    );
+    assert!(package_project.is_ok());
+
+    let run_result = package_project
+        .expect("Failed to init package action")
+        .run();
+    assert!(matches!(
+        run_result.as_ref().expect_err("expected error"),
+        PackageActionError::UnsupportedHostArch(_)
+    ));
+
+    // Restore original value of RUSTUP_TOOLCHAIN
+    std::env::set_var("RUSTUP_TOOLCHAIN", rustup_toolchain_env);
+}
+
+#[test]
+fn given_a_driver_project_and_arch_cannot_be_parsed_from_rustup_toolchain_package_fails() {
+    // Input CLI args
+    let cwd = PathBuf::from("C:\\tmp\\sample-driver");
+    let profile = None;
+    let target_arch = None;
+    let verify_signature = true;
+    let sample_class = false;
+
+    // Driver project data
+    let driver_name = "sample-driver";
+    let cargo_toml_metadata = invalid_driver_cargo_toml();
+
+    // Store current val of RUSTUP_TOOLCHAIN and set it to unsupported arch for the
+    // test
+    let rustup_toolchain_env =
+        std::env::var("RUSTUP_TOOLCHAIN").expect("Failed to get RUSTUP_TOOLCHAIN in the tests");
+    std::env::set_var("RUSTUP_TOOLCHAIN", "invalid_rustup_toolchain_format");
+
+    let package_project = TestPackageAction::new(cwd.clone(), profile, target_arch, sample_class);
+    let package_project_action = package_project
+        .set_up_with_custom_toml(&cargo_toml_metadata)
+        .expect_detect_wdk_build_number(25100u32)
+        .expect_root_manifest_exists(&cwd, true)
+        .expect_path_canonicalization_cwd()
+        .expect_path_canonicalization_workspace_root()
+        .expect_path_canonicalization_all_package_roots()
+        .expect_path_canonicalization_package_manifest_path(&cwd)
+        .expect_cargo_build(driver_name, &cwd, None);
+
+    let package_project = PackageAction::new(
+        &PackageActionParams {
+            working_dir: &cwd,
+            profile: profile.as_ref(),
+            target_arch: target_arch.as_ref(),
+            verify_signature,
+            is_sample_class: sample_class,
+            verbosity_level: clap_verbosity_flag::Verbosity::new(1, 0),
+        },
+        package_project_action.mock_wdk_build_provider(),
+        package_project_action.mock_run_command(),
+        package_project_action.mock_fs_provider(),
+        package_project_action.mock_metadata_provider(),
+    );
+    assert!(package_project.is_ok());
+
+    let run_result = package_project
+        .expect("Failed to init package action")
+        .run();
+    assert!(matches!(
+        run_result.as_ref().expect_err("expected error"),
+        PackageActionError::UnableToReadArchInRustupToolChainEnv(_)
+    ));
+
+    // Restore original value of RUSTUP_TOOLCHAIN
+    std::env::set_var("RUSTUP_TOOLCHAIN", rustup_toolchain_env);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 /// Workspace tests
 ////////////////////////////////////////////////////////////////////////////////

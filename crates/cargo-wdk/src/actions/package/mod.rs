@@ -35,6 +35,9 @@ use crate::actions::{build::BuildAction, Profile};
 #[double]
 use crate::providers::{exec::CommandExec, fs::Fs, metadata::Metadata, wdk_build::WdkBuild};
 
+const AMD64_RUSTC_ARCH_STR: &str = "x86_64";
+const ARM64_RUSTC_ARCH_STR: &str = "aarch64";
+const RUSTUP_TOOLCHAIN_ENV_VAR: &str = "RUSTUP_TOOLCHAIN";
 pub struct PackageActionParams<'a> {
     pub working_dir: &'a Path,
     pub profile: Option<&'a Profile>,
@@ -439,7 +442,7 @@ impl<'a> PackageAction<'a> {
 /// * `RustupToolChainNotFound` error when `RUSTUP_TOOLCHAIN` environment
 ///   variable is not available
 fn detect_arch_from_rustup_toolchain() -> Result<CpuArchitecture, PackageActionError> {
-    std::env::var("RUSTUP_TOOLCHAIN").map_or_else(
+    std::env::var(RUSTUP_TOOLCHAIN_ENV_VAR).map_or_else(
         |e| {
             Err(PackageActionError::UnableToReadRustupToolchainEnv(
                 e.to_string(),
@@ -448,8 +451,8 @@ fn detect_arch_from_rustup_toolchain() -> Result<CpuArchitecture, PackageActionE
         |rustup_toolchain| {
             if let Some(arch) = rustup_toolchain.split('-').nth(1) {
                 match arch {
-                    "x86_64" => Ok(CpuArchitecture::Amd64),
-                    "aarch64" => Ok(CpuArchitecture::Arm64),
+                    AMD64_RUSTC_ARCH_STR => Ok(CpuArchitecture::Amd64),
+                    ARM64_RUSTC_ARCH_STR => Ok(CpuArchitecture::Arm64),
                     _ => Err(PackageActionError::UnsupportedHostArch(rustup_toolchain)),
                 }
             } else {
