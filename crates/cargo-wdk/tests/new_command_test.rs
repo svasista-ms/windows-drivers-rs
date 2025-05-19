@@ -57,14 +57,13 @@ fn create_and_build_new_driver_project(driver_type: &str) -> (String, String) {
     let driver_name = format!("test-{driver_type}-driver");
     let driver_name_underscored = driver_name.replace('-', "_");
     let tmp_dir = TempDir::new().expect("Unable to create new temp dir for test");
+    let driver_path = tmp_dir.join(driver_name.clone());
     println!("Temp dir: {}", tmp_dir.path().display());
     let mut cmd = Command::cargo_bin("cargo-wdk").expect("unable to find cargo-wdk binary");
     cmd.args([
         "new",
-        &driver_name,
-        driver_type,
-        "--cwd",
-        &tmp_dir.to_string_lossy(), // Root dir for tests is cargo-wdk
+        &format!("--{driver_type}"),
+        driver_path.to_string_lossy().as_ref(),
     ]);
 
     // assert command output
@@ -78,9 +77,9 @@ fn create_and_build_new_driver_project(driver_type: &str) -> (String, String) {
         tmp_dir.path().join(&driver_name).display()
     );
     assert!(stdout.contains(&format!(
-        "New Driver Project {} created at {}",
-        &driver_name_underscored,
-        tmp_dir.join(&driver_name).display()
+        "New {} driver created at {}",
+        driver_type.to_uppercase(),
+        tmp_dir.path().join(&driver_name).display()
     )));
 
     // asert paths

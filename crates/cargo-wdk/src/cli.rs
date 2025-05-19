@@ -3,12 +3,13 @@
 //! This module defines the top-level CLI layer, its argument types and
 //! structures used for parsing and validating arguments for various
 //! subcommands.
-use std::{path::PathBuf, str::FromStr};
+use std::path::PathBuf;
 
 use anyhow::{Ok, Result};
-use clap::{Args, Parser, Subcommand};
+use clap::{ArgGroup, Args, Parser, Subcommand};
+use clap_verbosity_flag::Verbosity;
 use mockall_double::double;
-use wdk_build::{CpuArchitecture, DriverConfig};
+use wdk_build::CpuArchitecture;
 
 use crate::actions::{
     build::{BuildAction, BuildActionParams},
@@ -22,65 +23,48 @@ use crate::providers::{exec::CommandExec, fs::Fs, metadata::Metadata, wdk_build:
 const ABOUT_STRING: &str = "cargo-wdk is a cargo extension that can be used to create and build \
                             Windows Rust driver projects.";
 const USAGE_STRING: &str = "cargo [+toolchain] wdk <subcommand> [options] [args]";
-const CARGO_WDK_DISPLAY_NAME: &str = "cargo wdk";
-const CARGO_WDK_BIN_NAME: &str = "cargo-wdk";
+const CARGO_WDK_BIN_NAME: &str = "cargo wdk";
 
-/// Validation errors for the driver project name arg passed to new project sub
-/// command
-#[derive(Debug, thiserror::Error)]
-pub enum InvalidDriverProjectNameError {
-    #[error("Project name cannot be empty")]
-    EmptyProjectNameError,
-    #[error("Project name can only contain alphanumeric characters, hyphens, and underscores")]
-    NonAlphanumericProjectNameError,
-    #[error("Project name must start with an alphabetic character")]
-    InvalidStartCharacter,
-    #[error("'{0}' is a reserved keyword or invalid name and cannot be used as a project name")]
-    ReservedName(String),
-}
-
-/// Type for Driver Project Name Argument
-#[derive(Debug, Clone)]
-pub struct ProjectNameArg(pub String);
-
-impl FromStr for ProjectNameArg {
-    type Err = InvalidDriverProjectNameError;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        if s.is_empty() {
-            return Err(InvalidDriverProjectNameError::EmptyProjectNameError);
-        }
-        if !s
-            .chars()
-            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
-        {
-            return Err(InvalidDriverProjectNameError::InvalidStartCharacter);
-        }
-        if !s
-            .chars()
-            .next()
-            .expect("Project name cannot be empty")
-            .is_alphabetic()
-        {
-            return Err(InvalidDriverProjectNameError::NonAlphanumericProjectNameError);
-        }
-        let invalid_names = ["crate", "self", "super", "extern", "_", "-", "new", "build"];
-        if invalid_names.contains(&s) {
-            return Err(InvalidDriverProjectNameError::ReservedName(s.to_string()));
-        }
-        std::result::Result::Ok(Self(s.to_string()))
-    }
-}
-
-/// Arguments for the `new` subcommand
 #[derive(Debug, Args)]
-pub struct NewProjectArgs {
-    #[clap(help = "Driver Project Name")]
-    pub driver_project_name: ProjectNameArg,
-    #[clap(help = "Driver Type", index = 2, ignore_case = true)]
-    pub driver_type: DriverConfig,
-    #[clap(long, help = "Path to the project", default_value = ".")]
-    pub cwd: PathBuf,
+#[clap(
+    group(
+        ArgGroup::new("driver_type")
+            .required(true)
+            .args(&["kmdf", "umdf", "wdm"])
+    ),
+    override_usage = "cargo wdk new <--kmdf|--umdf|--wdm> <PATH> [OPTIONS]"
+)]
+pub struct NewCommandArgs {
+    /// Create a KMDF driver crate
+    #[clap(
+        long,
+        help = "Create a KMDF driver crate",
+        help_heading = "Driver Configuration"
+    )]
+    pub kmdf: bool,
+
+    /// Create a UMDF driver crate
+    #[clap(
+        long,
+        help = "Create a UMDF driver crate",
+        help_heading = "Driver Configuration"
+    )]
+    pub umdf: bool,
+
+    /// Create a WDM driver crate
+    #[clap(
+        long,
+        help = "Create a WDM driver crate",
+        help_heading = "Driver Configuration"
+    )]
+    pub wdm: bool,
+
+    /// Path at which the new crate should be created
+    #[clap(
+        value_name = "PATH",
+        help = "Path at which the new crate should be created"
+    )]
+    pub path: PathBuf,
 }
 
 /// Arguments for the `build` subcommand
@@ -106,7 +90,7 @@ pub struct BuildProjectArgs {
 #[derive(Debug, Subcommand)]
 pub enum Subcmd {
     #[clap(name = "new", about = "Create a new Windows Driver Kit project")]
-    New(NewProjectArgs),
+    New(NewCommandArgs),
     #[clap(name = "build", about = "Build the Windows Driver Kit project")]
     Build(BuildProjectArgs),
 }
@@ -116,19 +100,20 @@ pub enum Subcmd {
 #[clap(
     name = env!("CARGO_PKG_NAME"),
     version = env!("CARGO_PKG_VERSION"),
-    display_name = CARGO_WDK_DISPLAY_NAME,
     bin_name = CARGO_WDK_BIN_NAME,
+    display_name = CARGO_WDK_BIN_NAME,
     author = env!("CARGO_PKG_AUTHORS"),
     about = ABOUT_STRING,
     override_usage = USAGE_STRING,
 )]
 pub struct Cli {
-    #[clap(name = "cargo command", default_value = "wdk")]
+    #[clap(name = "cargo command", default_value = "wdk", hide = true)]
     pub cargo_command: String,
     #[clap(subcommand)]
     pub sub_cmd: Subcmd,
     #[command(flatten)]
-    pub verbose: clap_verbosity_flag::Verbosity,
+    #[clap(next_help_heading = "Verbosity")]
+    pub verbose: Verbosity,
 }
 
 impl Cli {
@@ -142,15 +127,32 @@ impl Cli {
 
         match self.sub_cmd {
             Subcmd::New(cli_args) => {
-                let new_action = NewAction::new(
-                    &cli_args.driver_project_name.0,
-                    cli_args.driver_type,
-                    &cli_args.cwd,
+                let driver_types = [
+                    (cli_args.kmdf, "kmdf"),
+                    (cli_args.umdf, "umdf"),
+                    (cli_args.wdm, "wdm"),
+                    // More driver types can be added here
+                ];
+                let selected: Vec<&str> = driver_types
+                    .iter()
+                    .filter_map(|(flag, name)| if *flag { Some(*name) } else { None })
+                    .collect();
+                if selected.len() != 1 {
+                    return Err(anyhow::anyhow!(
+                        "Please select exactly one driver type: kmdf, umdf, or wdm"
+                    ));
+                }
+                let driver_type = selected[0];
+
+                NewAction::new(
+                    &cli_args.path,
+                    driver_type,
                     self.verbose,
                     &command_exec,
                     &fs,
-                );
-                new_action.run()?;
+                )
+                .run()?;
+
                 Ok(())
             }
             Subcmd::Build(cli_args) => {
