@@ -18,4 +18,6 @@ pub enum NewActionError {
     InvalidDriverCrateName(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error("Invalid driver crate name: {0}")]
+    InvalidDriverCrateName(String),
 }

@@ -14,6 +14,7 @@ use wdk_build::CpuArchitecture;
 use crate::actions::{
     build::{BuildAction, BuildActionParams},
     new::NewAction,
+    DriverType,
     Profile,
     TargetArch,
 };
@@ -22,49 +23,63 @@ use crate::providers::{exec::CommandExec, fs::Fs, metadata::Metadata, wdk_build:
 
 const ABOUT_STRING: &str = "cargo-wdk is a cargo extension that can be used to create and build \
                             Windows Rust driver projects.";
-const USAGE_STRING: &str = "cargo [+toolchain] wdk <subcommand> [options] [args]";
 const CARGO_WDK_BIN_NAME: &str = "cargo wdk";
+const CARGO_WDK_NEW_USAGE_STRING: &str = "cargo wdk new [OPTIONS] [PATH]";
+const DRIVER_TYPE_ARGUMENT_NAMES: &[&str] = &["kmdf", "umdf", "wdm"];
 
 #[derive(Debug, Args)]
 #[clap(
     group(
         ArgGroup::new("driver_type")
             .required(true)
-            .args(&["kmdf", "umdf", "wdm"])
+            .args(DRIVER_TYPE_ARGUMENT_NAMES)
     ),
-    override_usage = "cargo wdk new <--kmdf|--umdf|--wdm> <PATH> [OPTIONS]"
+    override_usage = CARGO_WDK_NEW_USAGE_STRING,
 )]
 pub struct NewCommandArgs {
     /// Create a KMDF driver crate
-    #[clap(
-        long,
-        help = "Create a KMDF driver crate",
-        help_heading = "Driver Configuration"
-    )]
+    #[arg(long)]
     pub kmdf: bool,
 
     /// Create a UMDF driver crate
-    #[clap(
-        long,
-        help = "Create a UMDF driver crate",
-        help_heading = "Driver Configuration"
-    )]
+    #[arg(long)]
     pub umdf: bool,
 
     /// Create a WDM driver crate
-    #[clap(
-        long,
-        help = "Create a WDM driver crate",
-        help_heading = "Driver Configuration"
-    )]
+    #[arg(long)]
     pub wdm: bool,
 
-    /// Path at which the new crate should be created
-    #[clap(
-        value_name = "PATH",
-        help = "Path at which the new crate should be created"
-    )]
-    pub path: PathBuf,
+    /// Path at which the new driver crate should be created
+    #[arg()]
+    pub path: Option<PathBuf>,
+}
+
+impl NewCommandArgs {
+    /// Checks which `driver_type` flag was passed to the `new` command
+    /// invocation and returns the corresponding `DriverType` enum variant.
+    /// The flag which was passed will be set to `true` in `NewCommandArgs`.
+    ///
+    /// # Returns
+    ///
+    /// * `DriverType`
+    ///
+    /// # Panics
+    ///
+    /// * If none of the driver types were selected.
+    fn get_selected_driver_type(&self) -> DriverType {
+        if self.kmdf {
+            DriverType::Kmdf
+        } else if self.umdf {
+            DriverType::Umdf
+        } else if self.wdm {
+            DriverType::Wdm
+        } else {
+            panic!(
+                "No driver type selected. Clap::ArgGroup should have ensured that one and only \
+                 one driver type is selected"
+            )
+        }
+    }
 }
 
 /// Arguments for the `build` subcommand
@@ -104,7 +119,6 @@ pub enum Subcmd {
     display_name = CARGO_WDK_BIN_NAME,
     author = env!("CARGO_PKG_AUTHORS"),
     about = ABOUT_STRING,
-    override_usage = USAGE_STRING,
 )]
 pub struct Cli {
     #[clap(name = "cargo command", default_value = "wdk", hide = true)]
@@ -127,32 +141,14 @@ impl Cli {
 
         match self.sub_cmd {
             Subcmd::New(cli_args) => {
-                let driver_types = [
-                    (cli_args.kmdf, "kmdf"),
-                    (cli_args.umdf, "umdf"),
-                    (cli_args.wdm, "wdm"),
-                    // More driver types can be added here
-                ];
-                let selected: Vec<&str> = driver_types
-                    .iter()
-                    .filter_map(|(flag, name)| if *flag { Some(*name) } else { None })
-                    .collect();
-                if selected.len() != 1 {
-                    return Err(anyhow::anyhow!(
-                        "Please select exactly one driver type: kmdf, umdf, or wdm"
-                    ));
-                }
-                let driver_type = selected[0];
-
                 NewAction::new(
-                    &cli_args.path,
-                    driver_type,
+                    cli_args.path.as_ref().unwrap_or(&std::env::current_dir()?),
+                    cli_args.get_selected_driver_type(),
                     self.verbose,
                     &command_exec,
                     &fs,
                 )
                 .run()?;
-
                 Ok(())
             }
             Subcmd::Build(cli_args) => {
@@ -230,9 +226,12 @@ mod tests {
     use mockall_double::double;
     use wdk_build::CpuArchitecture;
 
-    use crate::cli::Cli;
     #[double]
     use crate::providers::exec::CommandExec;
+    use crate::{
+        actions::DriverType,
+        cli::{Cli, NewCommandArgs},
+    };
 
     #[test]
     pub fn given_toolchain_host_tuple_is_x86_64_when_detect_default_arch_from_rustc_is_called_then_it_returns_arch(
@@ -440,5 +439,53 @@ mod tests {
                 "command error"
             )
         );
+    }
+
+    #[test]
+    fn test_get_selected_driver_type_kmdf() {
+        let args = NewCommandArgs {
+            kmdf: true,
+            umdf: false,
+            wdm: false,
+            path: None,
+        };
+        assert_eq!(args.get_selected_driver_type(), DriverType::Kmdf);
+    }
+
+    #[test]
+    fn test_get_selected_driver_type_umdf() {
+        let args = NewCommandArgs {
+            kmdf: false,
+            umdf: true,
+            wdm: false,
+            path: None,
+        };
+        assert_eq!(args.get_selected_driver_type(), DriverType::Umdf);
+    }
+
+    #[test]
+    fn test_get_selected_driver_type_wdm() {
+        let args = NewCommandArgs {
+            kmdf: false,
+            umdf: false,
+            wdm: true,
+            path: None,
+        };
+        assert_eq!(args.get_selected_driver_type(), DriverType::Wdm);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "No driver type selected. Clap::ArgGroup should have ensured that one and only \
+                    one driver type is selected"
+    )]
+    fn test_get_selected_driver_type_no_selection() {
+        let args = NewCommandArgs {
+            kmdf: false,
+            umdf: false,
+            wdm: false,
+            path: None,
+        };
+        args.get_selected_driver_type();
     }
 }

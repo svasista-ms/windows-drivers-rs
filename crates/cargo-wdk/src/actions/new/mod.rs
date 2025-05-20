@@ -21,7 +21,7 @@ use tracing::{debug, info};
 
 #[double]
 use crate::providers::{exec::CommandExec, fs::Fs};
-use crate::trace;
+use crate::{actions::DriverType, trace};
 
 /// Directory containing the templates to be bundled with the utility
 static TEMPLATES_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/templates");
@@ -30,7 +30,7 @@ static TEMPLATES_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/templates");
 /// project based on the specified driver type.
 pub struct NewAction<'a> {
     path: &'a Path,
-    driver_type: &'a str,
+    driver_type: DriverType,
     verbosity_level: Verbosity,
     command_exec: &'a CommandExec,
     fs: &'a Fs,
@@ -52,9 +52,9 @@ impl<'a> NewAction<'a> {
     /// # Returns
     ///
     /// * `Self` - A new instance of `NewAction`.
-    pub fn new(
+    pub const fn new(
         path: &'a Path,
-        driver_type: &'a str,
+        driver_type: DriverType,
         verbosity_level: Verbosity,
         command_exec: &'a CommandExec,
         fs: &'a Fs,
@@ -80,11 +80,15 @@ impl<'a> NewAction<'a> {
     /// * `NewActionError::CargoNewCommand` - If there is an error running the
     ///   `cargo new` command.
     /// * `NewActionError::TemplateNotFound` - If a template file matching the
-    ///   d`river type is not found
+    ///   driver type is not found
     /// * `NewActionError::FileSystem` - If there is an error with file system
     ///   operations.
     pub fn run(&self) -> Result<(), NewActionError> {
-        debug!("Creating new project");
+        info!(
+            "Creating new {} driver crate at: {}",
+            self.driver_type,
+            self.path.display()
+        );
         self.run_cargo_new()?;
         self.copy_lib_rs_template()?;
         self.update_cargo_toml()?;
@@ -92,8 +96,8 @@ impl<'a> NewAction<'a> {
         self.copy_build_rs_template()?;
         self.copy_cargo_config()?;
         info!(
-            "New {} driver created at {}",
-            self.driver_type.to_uppercase(),
+            "New {} driver crate created successfully at: {}",
+            self.driver_type,
             self.path.display()
         );
         Ok(())
@@ -110,7 +114,8 @@ impl<'a> NewAction<'a> {
     ///
     /// * `NewActionError::CargoNewCommand` - If there is an error running the
     ///   `cargo new` command.
-    fn run_cargo_new(&self) -> Result<&Self, NewActionError> {
+    fn run_cargo_new(&self) -> Result<(), NewActionError> {
+        debug!("Running cargo new command");
         let path_str = self.path.to_string_lossy().to_string();
         let mut args = vec!["new", "--lib", &path_str, "--vcs", "none"];
         if let Some(flag) = trace::get_cargo_verbose_flags(self.verbosity_level) {
@@ -119,7 +124,7 @@ impl<'a> NewAction<'a> {
         if let Err(e) = self.command_exec.run("cargo", &args, None) {
             return Err(NewActionError::CargoNewCommand(e));
         }
-        Ok(&self)
+        Ok(())
     }
 
     /// Copies the `lib.rs` template for the specified driver type to the
@@ -238,7 +243,7 @@ impl<'a> NewAction<'a> {
             .to_string_lossy()
             .to_string();
         debug!("Creating .inx file for: {}", driver_crate_name);
-        let underscored_driver_crate_name = driver_crate_name.replace("-", "_");
+        let underscored_driver_crate_name = driver_crate_name.replace('-', "_");
         let inx_template_path =
             PathBuf::from(&self.driver_type.to_string()).join("driver_name.inx.tmp");
         let inx_template_file = TEMPLATES_DIR.get_file(&inx_template_path).ok_or_else(|| {
@@ -251,7 +256,7 @@ impl<'a> NewAction<'a> {
         );
         let inx_output_path = self
             .path
-            .join(format!("{}.inx", underscored_driver_crate_name));
+            .join(format!("{underscored_driver_crate_name}.inx"));
         self.fs
             .write_to_file(&inx_output_path, substituted_inx_content.as_bytes())?;
         Ok(())
