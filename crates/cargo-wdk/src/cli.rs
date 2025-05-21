@@ -17,6 +17,9 @@ use crate::actions::{
     DriverType,
     Profile,
     TargetArch,
+    KMDF_STR,
+    UMDF_STR,
+    WDM_STR,
 };
 #[double]
 use crate::providers::{exec::CommandExec, fs::Fs, metadata::Metadata, wdk_build::WdkBuild};
@@ -25,18 +28,18 @@ const ABOUT_STRING: &str = "cargo-wdk is a cargo extension that can be used to c
                             Windows Rust driver projects.";
 const CARGO_WDK_BIN_NAME: &str = "cargo wdk";
 const CARGO_WDK_NEW_USAGE_STRING: &str = "cargo wdk new [OPTIONS] [PATH]";
-const DRIVER_TYPE_ARGUMENT_NAMES: &[&str] = &["kmdf", "umdf", "wdm"];
 
+/// Arguments for the `new` subcommand
 #[derive(Debug, Args)]
 #[clap(
     group(
         ArgGroup::new("driver_type")
             .required(true)
-            .args(DRIVER_TYPE_ARGUMENT_NAMES)
+            .args([KMDF_STR, UMDF_STR, WDM_STR])
     ),
     override_usage = CARGO_WDK_NEW_USAGE_STRING,
 )]
-pub struct NewCommandArgs {
+pub struct NewArgs {
     /// Create a KMDF driver crate
     #[arg(long)]
     pub kmdf: bool,
@@ -54,10 +57,10 @@ pub struct NewCommandArgs {
     pub path: Option<PathBuf>,
 }
 
-impl NewCommandArgs {
+impl NewArgs {
     /// Checks which `driver_type` flag was passed to the `new` command
     /// invocation and returns the corresponding `DriverType` enum variant.
-    /// The flag which was passed will be set to `true` in `NewCommandArgs`.
+    /// The flag which was passed will be set to `true` in `NewArgs`.
     ///
     /// # Returns
     ///
@@ -84,20 +87,25 @@ impl NewCommandArgs {
 
 /// Arguments for the `build` subcommand
 #[derive(Debug, Args)]
-pub struct BuildProjectArgs {
-    #[clap(long, help = "Path to the project", default_value = ".")]
+pub struct BuildArgs {
+    /// Path to the project
+    #[arg(long, default_value = ".")]
     pub cwd: PathBuf,
-    #[clap(long, help = "Build Profile/Configuration", ignore_case = true)]
+
+    /// Build artifacts with the specified profile
+    #[arg(long, ignore_case = true)]
     pub profile: Option<Profile>,
-    #[clap(long, help = "Build Target", ignore_case = true)]
+
+    /// Build for the target architecture
+    #[arg(long, ignore_case = true)]
     pub target_arch: Option<CpuArchitecture>,
-    #[clap(long, help = "Verify Signatures", default_value = "false")]
+
+    /// Verify the signature
+    #[arg(long)]
     pub verify_signature: bool,
-    #[clap(
-        long,
-        help = "Build Sample Class Driver Project",
-        default_value = "false"
-    )]
+
+    /// Build Sample Class Driver Project
+    #[arg(long)]
     pub sample: bool,
 }
 
@@ -105,9 +113,9 @@ pub struct BuildProjectArgs {
 #[derive(Debug, Subcommand)]
 pub enum Subcmd {
     #[clap(name = "new", about = "Create a new Windows Driver Kit project")]
-    New(NewCommandArgs),
+    New(NewArgs),
     #[clap(name = "build", about = "Build the Windows Driver Kit project")]
-    Build(BuildProjectArgs),
+    Build(BuildArgs),
 }
 
 /// Top level command line interface for cargo wdk
@@ -230,7 +238,7 @@ mod tests {
     use crate::providers::exec::CommandExec;
     use crate::{
         actions::DriverType,
-        cli::{Cli, NewCommandArgs},
+        cli::{Cli, NewArgs},
     };
 
     #[test]
@@ -443,7 +451,7 @@ mod tests {
 
     #[test]
     fn test_get_selected_driver_type_kmdf() {
-        let args = NewCommandArgs {
+        let args = NewArgs {
             kmdf: true,
             umdf: false,
             wdm: false,
@@ -454,7 +462,7 @@ mod tests {
 
     #[test]
     fn test_get_selected_driver_type_umdf() {
-        let args = NewCommandArgs {
+        let args = NewArgs {
             kmdf: false,
             umdf: true,
             wdm: false,
@@ -465,7 +473,7 @@ mod tests {
 
     #[test]
     fn test_get_selected_driver_type_wdm() {
-        let args = NewCommandArgs {
+        let args = NewArgs {
             kmdf: false,
             umdf: false,
             wdm: true,
@@ -480,7 +488,7 @@ mod tests {
                     one driver type is selected"
     )]
     fn test_get_selected_driver_type_no_selection() {
-        let args = NewCommandArgs {
+        let args = NewArgs {
             kmdf: false,
             umdf: false,
             wdm: false,

@@ -15,6 +15,11 @@ use std::{
 };
 
 use wdk_build::CpuArchitecture;
+
+pub const KMDF_STR: &str = "kmdf";
+pub const UMDF_STR: &str = "umdf";
+pub const WDM_STR: &str = "wdm";
+
 #[derive(Debug, Clone, Copy)]
 pub enum Profile {
     Dev,
@@ -77,9 +82,9 @@ impl FromStr for DriverType {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "kmdf" => std::result::Result::Ok(Self::Kmdf),
-            "umdf" => std::result::Result::Ok(Self::Umdf),
-            "wdm" => std::result::Result::Ok(Self::Wdm),
+            KMDF_STR => std::result::Result::Ok(Self::Kmdf),
+            UMDF_STR => std::result::Result::Ok(Self::Umdf),
+            WDM_STR => std::result::Result::Ok(Self::Wdm),
             _ => Err(format!("'{s}' is not a valid driver type")),
         }
     }
@@ -88,9 +93,9 @@ impl FromStr for DriverType {
 impl Display for DriverType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
-            Self::Kmdf => "kmdf",
-            Self::Umdf => "umdf",
-            Self::Wdm => "wdm",
+            Self::Kmdf => KMDF_STR,
+            Self::Umdf => UMDF_STR,
+            Self::Wdm => WDM_STR,
         };
         write!(f, "{s}")
     }

@@ -150,7 +150,7 @@ impl<'a> NewAction<'a> {
         let template_file = TEMPLATES_DIR.get_file(&template_path).ok_or_else(|| {
             NewActionError::TemplateNotFound(template_path.to_string_lossy().into_owned())
         })?;
-        let lib_rs_path = self.path.join("src/lib.rs");
+        let lib_rs_path = self.path.join("src").join("lib.rs");
         self.fs
             .write_to_file(&lib_rs_path, template_file.contents())?;
         Ok(())
@@ -278,7 +278,7 @@ impl<'a> NewAction<'a> {
     pub fn copy_cargo_config(&self) -> Result<(), NewActionError> {
         debug!("Copying .cargo/config.toml file");
         create_dir_all(self.path.join(".cargo"))?;
-        let cargo_config_path = self.path.join(".cargo/config.toml");
+        let cargo_config_path = self.path.join(".cargo").join("config.toml");
         let cargo_config_template_path = PathBuf::from("config.toml.tmp");
         let cargo_config_template_file = TEMPLATES_DIR
             .get_file(&cargo_config_template_path)
