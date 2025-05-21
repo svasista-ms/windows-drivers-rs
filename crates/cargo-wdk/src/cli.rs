@@ -69,19 +69,17 @@ impl NewArgs {
     /// # Panics
     ///
     /// * If none of the driver types were selected.
-    fn get_selected_driver_type(&self) -> DriverType {
+    const fn get_selected_driver_type(&self) -> Option<DriverType> {
         if self.kmdf {
-            DriverType::Kmdf
-        } else if self.umdf {
-            DriverType::Umdf
-        } else if self.wdm {
-            DriverType::Wdm
-        } else {
-            panic!(
-                "No driver type selected. Clap::ArgGroup should have ensured that one and only \
-                 one driver type is selected"
-            )
+            return Some(DriverType::Kmdf);
         }
+        if self.umdf {
+            return Some(DriverType::Umdf);
+        }
+        if self.wdm {
+            return Some(DriverType::Wdm);
+        }
+        None
     }
 }
 
@@ -151,7 +149,12 @@ impl Cli {
             Subcmd::New(cli_args) => {
                 NewAction::new(
                     cli_args.path.as_ref().unwrap_or(&std::env::current_dir()?),
-                    cli_args.get_selected_driver_type(),
+                    cli_args.get_selected_driver_type().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "No driver type selected. Clap::ArgGroup should have ensured that one \
+                             and only one driver type is selected"
+                        )
+                    })?,
                     self.verbose,
                     &command_exec,
                     &fs,
@@ -457,7 +460,7 @@ mod tests {
             wdm: false,
             path: None,
         };
-        assert_eq!(args.get_selected_driver_type(), DriverType::Kmdf);
+        assert_eq!(args.get_selected_driver_type(), Some(DriverType::Kmdf));
     }
 
     #[test]
@@ -468,7 +471,7 @@ mod tests {
             wdm: false,
             path: None,
         };
-        assert_eq!(args.get_selected_driver_type(), DriverType::Umdf);
+        assert_eq!(args.get_selected_driver_type(), Some(DriverType::Umdf));
     }
 
     #[test]
@@ -479,14 +482,10 @@ mod tests {
             wdm: true,
             path: None,
         };
-        assert_eq!(args.get_selected_driver_type(), DriverType::Wdm);
+        assert_eq!(args.get_selected_driver_type(), Some(DriverType::Wdm));
     }
 
     #[test]
-    #[should_panic(
-        expected = "No driver type selected. Clap::ArgGroup should have ensured that one and only \
-                    one driver type is selected"
-    )]
     fn test_get_selected_driver_type_no_selection() {
         let args = NewArgs {
             kmdf: false,
@@ -494,6 +493,6 @@ mod tests {
             wdm: false,
             path: None,
         };
-        args.get_selected_driver_type();
+        assert_eq!(args.get_selected_driver_type(), None);
     }
 }

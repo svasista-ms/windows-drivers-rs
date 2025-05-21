@@ -14,7 +14,7 @@ pub enum NewActionError {
     FileSystem(#[from] FileError),
     #[error("Template file not found: {0}")]
     TemplateNotFound(String),
-    #[error("Invalid name for driver crate. Path provided to the command: {0}")]
+    #[error("Unable to derive driver crate name from the provided path: {0}")]
     InvalidDriverCrateName(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
