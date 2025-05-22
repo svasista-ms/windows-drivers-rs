@@ -151,8 +151,8 @@ impl Cli {
                     cli_args.path.as_ref().unwrap_or(&std::env::current_dir()?),
                     cli_args.get_selected_driver_type().ok_or_else(|| {
                         anyhow::anyhow!(
-                            "No driver type selected. Clap::ArgGroup should have ensured that one \
-                             and only one driver type is selected"
+                            "No driver type selected. Please provide one of --kmdf, --umdf, or \
+                             --wdm"
                         )
                     })?,
                     self.verbose,
