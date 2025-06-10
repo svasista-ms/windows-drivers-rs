@@ -64,6 +64,7 @@ jobs:
             nuget install WDK -Version $wdk -Source https://nuget.org -NonInteractive -OutputDirectory C:\WDK
           } else {
             Write-Host "Using Winget to install WDK version $wdk..."
+            $wdk = "Microsoft.WindowsWDK.$wdk"
             if ((Get-WinGetPackage -Id $wdk -Source winget -MatchOption Equals).Id -eq '$wdk') {
               Write-Host "$wdk is already installed. Attempting to update..."
               Update-WinGetPackage -Id $wdk -Source winget -MatchOption Equals -Mode Silent -Force

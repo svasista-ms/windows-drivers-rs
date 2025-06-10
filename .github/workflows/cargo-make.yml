@@ -64,25 +64,19 @@ jobs:
       - name: Install WDK (${{ matrix.wdk.version }})
         run: |
           $wdk = '${{ matrix.wdk.version }}'
-          if ($wdk -match '^10\.0\.(\d{5})\.(\d{1,4})$') {
-            $majorVersion = [int]$matches[1]
-            $minorVersion = [int]$matches[2]
-            if ($majorVersion -ge 26100 -and $minorVersion -ge 1) {
-              Write-Host "Using pre-installed NuGet to install WDK version $wdk..."
-              nuget install WDK -Version $wdk -Source https://nuget.org -NonInteractive -OutputDirectory C:\WDK
-            } else {
-              Write-Host "Using Winget to install WDK version $wdk..."
-              if ((Get-WinGetPackage -Id $wdk -Source winget -MatchOption Equals).Id -eq '$wdk') {
-                Write-Host "$wdk is already installed. Attempting to update..."
-                Update-WinGetPackage -Id $wdk -Source winget -MatchOption Equals -Mode Silent -Force
-              } else {
-                Write-Host "Installing $wdk..."
-                Install-WinGetPackage -Id $wdk -Source winget -MatchOption Equals -Mode Silent -Force
-              }
-            }
+          if ('${{ matrix.wdk.source }}' -eq 'nuget') {
+            Write-Host "Using pre-installed NuGet to install WDK version $wdk..."
+            nuget install WDK -Version $wdk -Source https://nuget.org -NonInteractive -OutputDirectory C:\WDK
           } else {
-            Write-Host "WDK version $wdk does not match the required format 10.0.{5 digit number}.{1 to 4 digit number}"
-            exit 1
+            Write-Host "Using Winget to install WDK version $wdk..."
+            $wdk = "Microsoft.WindowsWDK.$wdk"
+            if ((Get-WinGetPackage -Id $wdk -Source winget -MatchOption Equals).Id -eq '$wdk') {
+              Write-Host "$wdk is already installed. Attempting to update..."
+              Update-WinGetPackage -Id $wdk -Source winget -MatchOption Equals -Mode Silent -Force
+            } else {
+              Write-Host "Installing $wdk..."
+              Install-WinGetPackage -Id $wdk -Source winget -MatchOption Equals -Mode Silent -Force
+            }
           }
 
       - name: Install Rust Toolchain (${{ matrix.rust_toolchain }})
