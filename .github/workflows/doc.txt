@@ -21,20 +21,18 @@ jobs:
             source: winget
           - version: 10.0.26100 # GE WDK
             source: nuget
-          - version: 10.0.26100.1 # test
-            source: nuget
 
         llvm:
           - 17.0.6
 
         rust_toolchain:
           - stable
-          - beta
-          - nightly
+          # - beta
+          # - nightly
 
         cargo_profile:
           - dev
-          - release
+          # - release
 
         target_triple:
           - name: x86_64-pc-windows-msvc

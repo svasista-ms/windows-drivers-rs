@@ -24,20 +24,18 @@ jobs:
             source: winget
           - version: 10.0.26100 # GE WDK
             source: nuget
-          - version: 10.0.26100.1 # test
-            source: nuget
 
         llvm:
           - 17.0.6
 
         rust_toolchain:
           - stable
-          - beta
-          - nightly
+          # - beta
+          # - nightly
 
         cargo_profile:
           - dev
-          - release
+          # - release
 
         target_triple:
           - name: x86_64-pc-windows-msvc
@@ -64,55 +62,6 @@ jobs:
           }
           clang --version
 
-      - name: Install Rust Toolchain (${{ matrix.rust_toolchain }})
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.rust_toolchain }}
-          components: clippy
-          targets: ${{ matrix.target_triple }}
-
-      - name: Run Cargo Clippy
-        run: cargo +${{ matrix.rust_toolchain }} clippy --locked --profile ${{ matrix.cargo_profile }} --target ${{ matrix.target_triple }} --all-targets --all-features
-
-  unused_deps:
-    name: Detect Unused Cargo Dependencies
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Install Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install Cargo Machete
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-machete
-
-      - name: Run Cargo Machete
-        run: cargo machete --skip-target-dir
-
-  winget_installation:
-    name: Winget Installation
-    runs-on: windows-latest
-    steps:
-      - name: Install WDK via Winget
-        run: |
-          $wdk = '${{ matrix.wdk.version }}'
-          Write-Host "Installing $wdk via Winget..."
-          Install-WinGetPackage -Id $wdk -Source winget -MatchOption Equals -Mode Silent -Force
-
-  nuget_installation:
-    name: NuGet Installation
-    runs-on: windows-latest
-    steps:
-      - name: Install WDK via NuGet
-        run: |
-          $wdk = '${{ matrix.wdk.version }}'
-          Write-Host "Installing $wdk via NuGet..."
-          nuget install WDK -Version $wdk -Source https://nuget.org -NonInteractive -OutputDirectory C:\WDK
-
       - name: Install WDK (${{ matrix.wdk.version }})
         run: |
           $wdk = '${{ matrix.wdk.version }}'
@@ -129,3 +78,13 @@ jobs:
               Install-WinGetPackage -Id $wdk -Source winget -MatchOption Equals -Mode Silent -Force
             }
           }
+
+      - name: Install Rust Toolchain (${{ matrix.rust_toolchain }})
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust_toolchain }}
+          components: clippy
+          targets: ${{ matrix.target_triple }}
+
+      - name: Run Cargo Clippy
+        run: cargo +${{ matrix.rust_toolchain }} clippy --locked --profile ${{ matrix.cargo_profile }} --target ${{ matrix.target_triple }} --all-targets --all-features

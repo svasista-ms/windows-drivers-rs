@@ -18,8 +18,6 @@ jobs:
             source: winget
           - version: 10.0.26100 # GE WDK
             source: nuget
-          - version: 10.0.26100.1 # test
-            source: nuget
 
         llvm:
           - 17.0.6
@@ -58,20 +56,6 @@ jobs:
           }
           clang --version
 
-      - name: Install Rust Toolchain (${{ matrix.rust_toolchain }})
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.rust_toolchain }}
-          targets: ${{ matrix.target_triple }}
-
-      - name: Install Cargo Expand
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-expand@1.0.85
-
-      - name: Run Cargo Test
-        run: cargo +${{ matrix.rust_toolchain }} test --locked --profile ${{ matrix.cargo_profile }} --target ${{ matrix.target_triple }} --all-features
-
       - name: Install WDK (${{ matrix.wdk.version }})
         run: |
           $wdk = '${{ matrix.wdk.version }}'
@@ -89,22 +73,17 @@ jobs:
             }
           }
 
-  winget_installation:
-    name: Winget Installation
-    runs-on: windows-latest
-    steps:
-      - name: Install WDK via Winget
-        run: |
-          $wdk = '${{ matrix.wdk }}'
-          Write-Host "Installing $wdk via Winget..."
-          Install-WinGetPackage -Id $wdk -Source winget -MatchOption Equals -Mode Silent -Force
+      - name: Install Rust Toolchain (${{ matrix.rust_toolchain }})
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust_toolchain }}
+          targets: ${{ matrix.target_triple }}
 
-  nuget_installation:
-    name: NuGet Installation
-    runs-on: windows-latest
-    steps:
-      - name: Install WDK via NuGet
-        run: |
-          $wdk = '${{ matrix.wdk }}'
-          Write-Host "Installing $wdk via NuGet..."
-          nuget install WDK -Version $wdk -Source https://nuget.org -NonInteractive -OutputDirectory C:\WDK
+      - name: Install Cargo Expand
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-expand@1.0.85
+
+      - name: Run Cargo Test
+        run: cargo +${{ matrix.rust_toolchain }} test --locked --profile ${{ matrix.cargo_profile }} --target ${{ matrix.target_triple }} --all-features
+
