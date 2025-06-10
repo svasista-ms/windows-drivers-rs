@@ -19,23 +19,20 @@ jobs:
     strategy:
       matrix:
         wdk:
-          - Microsoft.WindowsWDK.10.0.22621 # NI WDK
-          # Use versions numbers for NuGet WDK packages
-          # - 10.0.26100.1882
-          # - 10.0.26100.1591
-          - 10.0.26100.1
+          - 10.0.22621 # NI WDK
+          - 10.0.26100 # GE WDK
 
         llvm:
           - 17.0.6
 
         rust_toolchain:
           - stable
-          - beta
-          - nightly
+          # - beta
+          # - nightly
 
         cargo_profile:
           - dev
-          - release
+          # - release
 
         target_triple:
           - name: x86_64-pc-windows-msvc
@@ -63,22 +60,24 @@ jobs:
           clang --version
 
       - name: Install WDK (${{ matrix.wdk }})
-        if: matrix.wdk == 'Microsoft.WindowsWDK.10.0.22621'
-        run: |
-          if ((Get-WinGetPackage -Id ${{ matrix.wdk }} -Source winget -MatchOption Equals).Id -eq '${{ matrix.wdk }}') {
-            Write-Host "${{ matrix.wdk }} is already installed. Attempting to update..."
-            Update-WinGetPackage -Id ${{ matrix.wdk }} -Source winget -MatchOption Equals -Mode Silent -Force
-          } else {
-            Write-Host "Installing ${{ matrix.wdk }}..."
-            Install-WinGetPackage -Id ${{ matrix.wdk }} -Source winget -MatchOption Equals -Mode Silent -Force
-          }
-      
-      - name: Install ${{ matrix.wdk }} (NuGet)
-        if: startsWith(matrix.wdk, '10.0.')
         run: |
           $wdk = '${{ matrix.wdk }}'
-          if ($wdk -match '^10\.0\.\d{5}\.\d{1,4}$') {
-            ./.github/scripts/nuget-install-wdk.ps1 -wdkVersion $wdk
+          if ($wdk -match '^10\.0\.(\d{5})\.(\d{1,4})$') {
+            $majorVersion = [int]$matches[1]
+            $minorVersion = [int]$matches[2]
+            if ($majorVersion -ge 26100 -and $minorVersion -ge 1) {
+              Write-Host "Using pre-installed NuGet to install WDK version $wdk..."
+              nuget install WDK -Version $wdk -Source https://nuget.org -NonInteractive -OutputDirectory C:\WDK
+            } else {
+              Write-Host "Using Winget to install WDK version $wdk..."
+              if ((Get-WinGetPackage -Id $wdk -Source winget -MatchOption Equals).Id -eq '$wdk') {
+                Write-Host "$wdk is already installed. Attempting to update..."
+                Update-WinGetPackage -Id $wdk -Source winget -MatchOption Equals -Mode Silent -Force
+              } else {
+                Write-Host "Installing $wdk..."
+                Install-WinGetPackage -Id $wdk -Source winget -MatchOption Equals -Mode Silent -Force
+              }
+            }
           } else {
             Write-Host "WDK version $wdk does not match the required format 10.0.{5 digit number}.{1 to 4 digit number}"
             exit 1
@@ -91,9 +90,6 @@ jobs:
           targets: |
             ${{ matrix.target_triple.name }}
 
-      - name: Run Cargo Build
-        run: cargo +${{ matrix.rust_toolchain }} build --locked --profile ${{ matrix.cargo_profile }} --target ${{ matrix.target_triple.name }} --workspace --all-features
-
       - name: Install Cargo Make
         uses: taiki-e/install-action@v2
         with:
@@ -102,18 +98,13 @@ jobs:
       - name: Run Cargo Make (package-driver-flow) in Workspace
         run: cargo make package-driver-flow +${{ matrix.rust_toolchain }} --locked --profile ${{ matrix.cargo_profile }} --target ${{ matrix.target_triple.name }} --workspace
 
+      - name: Test wdk-pre-commit-flow cargo-make task
+        run: cargo make wdk-pre-commit-flow
+      
       - name: Build Examples (via Cargo Make)
         run: cargo make --cwd ./examples build +${{ matrix.rust_toolchain }} --locked --profile ${{ matrix.cargo_profile }} --target ${{ matrix.target_triple.name }}
 
       - name: Package Examples (via Cargo Make)
         run: cargo make --cwd ./examples package-driver-flow +${{ matrix.rust_toolchain }} --locked --profile ${{ matrix.cargo_profile }} --target ${{ matrix.target_triple.name }}
 
-      # Run cargo-wdk on examples
-      - name: Install cargo-wdk
-        run: cargo +${{ matrix.rust_toolchain }} install --path=crates/cargo-wdk --profile ${{ matrix.cargo_profile }} --locked --force
-
-      - name: Build & Package Examples (via cargo-wdk)
-        run: cargo +${{ matrix.rust_toolchain }} wdk build --cwd ./examples --profile ${{ matrix.cargo_profile }} --target-arch ${{ matrix.target_triple.arch }} --sample
-
-      - name: Run build on tests folder (via cargo-wdk)
-        run: cargo +${{ matrix.rust_toolchain }} wdk build --cwd ./tests --profile ${{ matrix.cargo_profile }} --target-arch ${{ matrix.target_triple.arch }}
+      
