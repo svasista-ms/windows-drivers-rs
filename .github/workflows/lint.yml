@@ -24,6 +24,8 @@ jobs:
             source: winget
           - version: 10.0.26100 # GE WDK
             source: nuget
+          - version: 10.0.26100.1 # test
+            source: nuget
 
         llvm:
           - 17.0.6
@@ -110,3 +112,20 @@ jobs:
           $wdk = '${{ matrix.wdk.version }}'
           Write-Host "Installing $wdk via NuGet..."
           nuget install WDK -Version $wdk -Source https://nuget.org -NonInteractive -OutputDirectory C:\WDK
+
+      - name: Install WDK (${{ matrix.wdk.version }})
+        run: |
+          $wdk = '${{ matrix.wdk.version }}'
+          if ('${{ matrix.wdk.source }}' -eq 'nuget') {
+            Write-Host "Using pre-installed NuGet to install WDK version $wdk..."
+            nuget install WDK -Version $wdk -Source https://nuget.org -NonInteractive -OutputDirectory C:\WDK
+          } else {
+            Write-Host "Using Winget to install WDK version $wdk..."
+            if ((Get-WinGetPackage -Id $wdk -Source winget -MatchOption Equals).Id -eq '$wdk') {
+              Write-Host "$wdk is already installed. Attempting to update..."
+              Update-WinGetPackage -Id $wdk -Source winget -MatchOption Equals -Mode Silent -Force
+            } else {
+              Write-Host "Installing $wdk..."
+              Install-WinGetPackage -Id $wdk -Source winget -MatchOption Equals -Mode Silent -Force
+            }
+          }

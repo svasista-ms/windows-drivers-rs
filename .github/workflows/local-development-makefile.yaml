@@ -5,14 +5,14 @@ on:
   schedule: # Trigger a job on default branch at 4AM PST everyday
     - cron: "0 11 * * *"
 
-name: Docs
+name: Local Development Makefile
 
 env:
-  RUSTDOCFLAGS: -D warnings
+  RUSTFLAGS: -D warnings
 
 jobs:
-  docs:
-    name: Docs
+  build:
+    name: Test WDR's local cargo-make Makefile
     runs-on: windows-latest
     strategy:
       matrix:
@@ -22,6 +22,8 @@ jobs:
           - version: 10.0.26100 # GE WDK
             source: nuget
           - version: 10.0.26100.1 # test
+            source: nuget
+          - version: 10.0.26100.0 # test
             source: nuget
 
         llvm:
@@ -67,6 +69,17 @@ jobs:
           toolchain: ${{ matrix.rust_toolchain }}
           targets: ${{ matrix.target_triple }}
 
+      - name: Run Cargo Build
+        run: cargo +${{ matrix.rust_toolchain }} build --locked --profile ${{ matrix.cargo_profile }} --target ${{ matrix.target_triple }} --workspace --all-features
+
+      - name: Install Cargo Make
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-make
+
+      - name: Test wdk-pre-commit-flow cargo-make task
+        run: cargo make wdk-pre-commit-flow
+
       - name: Install WDK (${{ matrix.wdk.version }})
         run: |
           $wdk = '${{ matrix.wdk.version }}'
@@ -83,12 +96,3 @@ jobs:
               Install-WinGetPackage -Id $wdk -Source winget -MatchOption Equals -Mode Silent -Force
             }
           }
-
-      - name: Run Cargo Doc
-        # proc-macro crates must be excluded to avoid cargo doc bug: https://github.com/rust-lang/cargo/issues/10368
-        run: cargo +${{ matrix.rust_toolchain }} doc --locked --profile ${{ matrix.cargo_profile }} --target ${{ matrix.target_triple }} --workspace --exclude wdk-macros --all-features
-
-      - name: Run Cargo Doc w/ proc-macro crates
-        if: matrix.target_triple == 'x86_64-pc-windows-msvc'
-        # cargo doc can only generate documentation for proc-macro crates when --target is not specified due to a cargo doc bug: https://github.com/rust-lang/cargo/issues/7677
-        run: cargo +${{ matrix.rust_toolchain }} doc --locked --profile ${{ matrix.cargo_profile }} --all-features
