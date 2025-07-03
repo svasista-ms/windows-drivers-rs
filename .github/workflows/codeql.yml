@@ -60,6 +60,20 @@ jobs:
 
     - name: Install WDK (${{ matrix.wdk }})
       run: |
+        # Get all installed WDK packages
+        $installedWdks = Get-WinGetPackage -Id "*WindowsWDK*" -Source winget -MatchOption Contains
+        
+        # Uninstall any WDK that's not the target version
+        foreach ($wdk in $installedWdks) {
+          if ($wdk.Id -ne '${{ matrix.wdk }}') {
+            Write-Host "Uninstalling $($wdk.Id) version $($wdk.InstalledVersion)..."
+            try {
+              Uninstall-WinGetPackage -Id $wdk.Id -Source winget -MatchOption Equals -Mode Silent -Force
+            } catch {
+              Write-Warning "Failed to uninstall $($wdk.Id): $($_.Exception.Message)"
+            }
+          }
+        }
         if ((Get-WinGetPackage -Id ${{ matrix.wdk }} -Source winget -MatchOption Equals).Id -eq '${{ matrix.wdk }}') {
           Write-Host "${{ matrix.wdk }} is already installed. Attempting to update..."
           Update-WinGetPackage -Id ${{ matrix.wdk }} -Source winget -MatchOption Equals -Mode Silent -Force
