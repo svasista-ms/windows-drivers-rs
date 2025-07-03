@@ -60,15 +60,35 @@ jobs:
 
     - name: Install WDK (${{ matrix.wdk }})
       run: |
-        # Uninstall any WDK that's not the target version
-        $latestWdk = 'Microsoft.WindowsWDK.10.0.26100'
-        Uninstall-WinGetPackage -Id $latestWdk -Source winget -MatchOption Equals -Mode Silent -Force
-        if ((Get-WinGetPackage -Id ${{ matrix.wdk }} -Source winget -MatchOption Equals).Id -eq '${{ matrix.wdk }}') {
-          Write-Host "${{ matrix.wdk }} is already installed. Attempting to update..."
-          Update-WinGetPackage -Id ${{ matrix.wdk }} -Source winget -MatchOption Equals -Mode Silent -Force
+        # Delete the 26100 WDK folder if it exists
+        $wdk26100Path = "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0"
+        if (Test-Path $wdk26100Path) {
+          Write-Host "Deleting WDK 26100 folder: $wdk26100Path"
+          Remove-Item -Path $wdk26100Path -Recurse -Force -ErrorAction SilentlyContinue
         } else {
-          Write-Host "Installing ${{ matrix.wdk }}..."
-          Install-WinGetPackage -Id ${{ matrix.wdk }} -Source winget -MatchOption Equals -Mode Silent -Force
+          Write-Host "WDK 26100 folder not found, skipping deletion."
+        }
+        
+        # Also delete the lib folder for 26100 if it exists
+        $wdk26100LibPath = "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0"
+        if (Test-Path $wdk26100LibPath) {
+          Write-Host "Deleting WDK 26100 lib folder: $wdk26100LibPath"
+          Remove-Item -Path $wdk26100LibPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        
+        # Install or update the target WDK (22621)
+        try {
+          $targetWdk = Get-WinGetPackage -Id ${{ matrix.wdk }} -Source winget -MatchOption Equals -ErrorAction SilentlyContinue
+          if ($targetWdk) {
+            Write-Host "${{ matrix.wdk }} is already installed. Attempting to update..."
+            Update-WinGetPackage -Id ${{ matrix.wdk }} -Source winget -MatchOption Equals -Mode Silent -Force
+          } else {
+            Write-Host "Installing ${{ matrix.wdk }}..."
+            Install-WinGetPackage -Id ${{ matrix.wdk }} -Source winget -MatchOption Equals -Mode Silent -Force
+          }
+        } catch {
+          Write-Host "Error installing ${{ matrix.wdk }}: $($_.Exception.Message)"
+          exit 1
         }
 
     - name: Install Rust Toolchain (${{ matrix.rust_toolchain }})
