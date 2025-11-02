@@ -71,7 +71,6 @@ jobs:
       with:
         version: ${{ matrix.wdk.version }}
         source: ${{ matrix.wdk.source }}
-        host: 'amd64' # codeql runs only on amd64 at the moment
         target: ${{ matrix.target_triple.arch }}
 
     - name: Install Rust Toolchain (${{ matrix.rust_toolchain }})

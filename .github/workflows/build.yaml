@@ -26,9 +26,7 @@ jobs:
       matrix:
         runner:
           - name: windows-2025
-            arch: amd64
           - name: windows-11-arm
-            arch: arm64
 
         wdk:
           - version: 10.0.22621 # NI WDK
@@ -81,7 +79,6 @@ jobs:
         with:
           version: ${{ matrix.wdk.version }}
           source: ${{ matrix.wdk.source }}
-          host: ${{ matrix.runner.arch }}
           target: ${{ matrix.target_triple.arch }}
 
       - name: Install Rust Toolchain (${{ matrix.rust_toolchain }})

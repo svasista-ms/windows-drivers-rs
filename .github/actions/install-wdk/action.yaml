@@ -6,17 +6,11 @@ inputs:
     description: "WDK version to install. Format: 10.0.XXXXX or 10.0.XXXXX.YYYY. If QFE (4th component) is omitted, the latest available QFE is selected."
     required: true
   source:
-    description: "Source to install WDK from (nuget or winget)."
+    description: "Source to install SDK and WDK from (nuget or winget)."
     required: true
     default: "nuget"
-  # required to set WDKBinRoot and WDKToolRoot based on the host architecture when using nuget
-  host:
-    description: "Host architecture (amd64 or arm64). Required when source is nuget."
-    required: true
-  # required to set WDKContentRoot based on the target architecture when using nuget
   target:
-    description: "Target architecture (amd64 or arm64). Required when source is nuget."
-    required: true
+    description: "Target architecture (amd64 or arm64) to set `WDKContentRoot` environment variable when using nuget WDK. Defaults to RUNNER_ARCH."
 
 runs:
   using: "composite"
@@ -29,13 +23,11 @@ runs:
 
         $source = '${{ inputs.source }}'
         $version = '${{ inputs.version }}'
-        $hostArch = '${{ inputs.host }}'
         $targetArch = '${{ inputs.target }}'
 
         Write-Host "Validating WDK installation inputs..."
         Write-Host "Source: $source"
         Write-Host "Version: $version"
-        Write-Host "Host: $hostArch"
         Write-Host "Target: $targetArch"
 
         # Validate source
@@ -48,21 +40,22 @@ runs:
             throw "Invalid version format: $version. Expected format: 10.0.XXXXX or 10.0.XXXXX.YYYY"
         }
 
-        # Validate architecture inputs for NuGet
+        # Validate target architecture input when using NuGet
         if ($source -eq 'nuget') {
-            if ([string]::IsNullOrWhiteSpace($hostArch) -or $hostArch -notin @('amd64', 'arm64')) {
-                throw "Invalid or missing host architecture: '$hostArch'. Must be 'amd64' or 'arm64' when source is nuget."
+            # If targetArch is not provided, default to RUNNER_ARCH
+            if ([string]::IsNullOrWhiteSpace($targetArch)) {
+                $targetArch = switch ($env:RUNNER_ARCH) {
+                    'X64' { 'amd64' }
+                    'ARM64' { 'arm64' }
+                }
             }
-            if ([string]::IsNullOrWhiteSpace($targetArch) -or $targetArch -notin @('amd64', 'arm64')) {
+            if ($targetArch -notin @('amd64', 'arm64')) {
                 throw "Invalid or missing target architecture: '$targetArch'. Must be 'amd64' or 'arm64' when source is nuget."
             }
         }
 
-        # Validate that host and target are not provided when using WinGet
+        # Ignore target architecture input when using WinGet
         if ($source -eq 'winget') {
-            if (-not [string]::IsNullOrWhiteSpace($hostArch)) {
-                Write-Host "Ignoring host architecture input. WDK installed via WinGet includes all architectures."
-            }
             if (-not [string]::IsNullOrWhiteSpace($targetArch)) {
                 Write-Host "Ignoring target architecture input. WDK installed via WinGet includes all architectures."
             }
@@ -97,9 +90,9 @@ runs:
         }
 
         # Input validation and normalization
-        $hostArch = switch ('${{ inputs.host }}') {
-            'amd64' { 'x64' }
-            'arm64' { 'ARM64' }
+        $hostArch = switch ($env:RUNNER_ARCH) {
+            'X64' { 'x64' }
+            'ARM64' { 'ARM64' }
         }
         $targetArch = switch ('${{ inputs.target }}') {
             'amd64' { 'x64' }
