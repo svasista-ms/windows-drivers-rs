@@ -235,7 +235,8 @@ impl Drop for NamedMutex {
 ///
 /// # Arguments
 ///
-/// * `cmd_name` - Name of the cargo-wdk command. Can be only "new" or "build"
+/// * `cmd_name` - Name of the cargo-wdk command. Can be "build", "new", or
+///   "clean"
 /// * `cmd_args` - Optional args for the command
 /// * `env_vars` - Optional environment variables to overlay for the command
 /// * `curr_working_dir` - Optional current working directory for the command

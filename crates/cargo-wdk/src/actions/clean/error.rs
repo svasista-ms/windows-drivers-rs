@@ -13,12 +13,10 @@ use crate::providers::error::{CommandError, FileError};
 pub enum CleanActionError {
     #[error(transparent)]
     FileIo(#[from] FileError),
-    #[error(transparent)]
-    CommandExecution(#[from] CommandError),
     #[error("No valid rust projects in the current working directory: {0}")]
     NoValidRustProjectsInTheDirectory(PathBuf),
     #[error("One or more projects failed to clean in the emulated workspace: {0}")]
     OneOrMoreRustProjectsFailedToClean(PathBuf),
     #[error("Error running cargo clean command")]
-    CargoClean(#[source] CommandError),
+    CargoClean(#[from] CommandError),
 }

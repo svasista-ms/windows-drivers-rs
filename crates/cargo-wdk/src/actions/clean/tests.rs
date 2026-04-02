@@ -26,7 +26,39 @@ fn create_successful_output() -> Output {
 }
 
 #[test]
-fn given_cargo_toml_exists_and_cargo_clean_succeeds_then_clean_action_succeeds() {
+fn new_succeeds_for_valid_args() {
+    let cwd = PathBuf::from("C:\\tmp");
+    let mock_fs = Fs::default();
+    let mock_exec = CommandExec::default();
+
+    let action = CleanAction::new(
+        &cwd,
+        clap_verbosity_flag::Verbosity::default(),
+        &mock_exec,
+        &mock_fs,
+    );
+
+    assert!(action.is_ok());
+}
+
+#[test]
+fn new_fails_for_empty_path() {
+    let cwd = PathBuf::from("");
+    let mock_fs = Fs::default();
+    let mock_exec = CommandExec::default();
+
+    let action = CleanAction::new(
+        &cwd,
+        clap_verbosity_flag::Verbosity::default(),
+        &mock_exec,
+        &mock_fs,
+    );
+
+    assert!(action.is_err());
+}
+
+#[test]
+fn run_invokes_cargo_clean_and_succeeds() {
     let cwd = PathBuf::from("C:\\tmp");
     let mut mock_fs = Fs::default();
     let mut mock_exec = CommandExec::default();
@@ -57,7 +89,7 @@ fn given_cargo_toml_exists_and_cargo_clean_succeeds_then_clean_action_succeeds()
 }
 
 #[test]
-fn given_cargo_toml_exists_and_cargo_clean_fails_then_clean_action_returns_error() {
+fn run_returns_error_when_cargo_clean_fails() {
     let cwd = PathBuf::from("C:\\tmp");
     let mut mock_fs = Fs::default();
     let mut mock_exec = CommandExec::default();
@@ -94,7 +126,7 @@ fn given_cargo_toml_exists_and_cargo_clean_fails_then_clean_action_returns_error
 }
 
 #[test]
-fn given_no_cargo_toml_and_no_rust_projects_then_returns_error() {
+fn run_returns_error_when_no_cargo_toml_and_no_rust_projects() {
     let cwd = PathBuf::from("C:\\tmp");
     let mut mock_fs = Fs::default();
     let mock_exec = CommandExec::default();
