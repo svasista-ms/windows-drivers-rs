@@ -62,8 +62,8 @@ impl<'a> CleanAction<'a> {
     /// 1. If the working directory has a `Cargo.toml`, run `cargo clean`
     ///    directly (standalone project or workspace root).
     /// 2. Otherwise, treat the directory as an emulated workspace: scan
-    ///    immediate subdirectories for Rust projects and clean each.
-    /// NOTE: This follows the same logic as the build action.
+    ///    immediate subdirectories for Rust projects and clean each. NOTE: This
+    ///    follows the same logic as the build action.
     ///
     /// # Returns
     /// `Result<(), CleanActionError>`
