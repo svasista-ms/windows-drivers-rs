@@ -112,10 +112,8 @@ impl<'a> CleanAction<'a> {
             }
 
             let working_dir_path = dir.path();
-            let sub_dir = working_dir_path
-                .file_name()
-                .expect("package sub directory name ended with \"..\" which is not expected")
-                .to_string_lossy();
+            let sub_dir = dir.file_name();
+            let sub_dir = sub_dir.to_string_lossy();
 
             found_at_least_one_project = true;
             debug!("Cleaning package(s) in dir {sub_dir}");
