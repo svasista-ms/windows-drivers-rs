@@ -98,34 +98,9 @@ impl<'a> CleanAction<'a> {
             self.working_dir.display()
         );
 
-        let mut is_valid_dir_with_rust_projects = false;
-        for dir in &dirs {
-            if self.fs.dir_file_type(dir)?.is_dir()
-                && self.fs.exists(&dir.path().join("Cargo.toml"))
-            {
-                debug!(
-                    "Found at least one valid Rust project directory: {}, continuing with the \
-                     clean flow",
-                    dir.path()
-                        .file_name()
-                        .expect(
-                            "package sub directory name ended with \"..\" which is not expected",
-                        )
-                        .to_string_lossy()
-                );
-                is_valid_dir_with_rust_projects = true;
-                break;
-            }
-        }
-
-        if !is_valid_dir_with_rust_projects {
-            return Err(CleanActionError::NoValidRustProjectsInTheDirectory(
-                self.working_dir.clone(),
-            ));
-        }
-
         info!("Cleaning package(s) in {}", self.working_dir.display());
 
+        let mut found_at_least_one_project = false;
         let mut failed_at_least_one_project = false;
         for dir in dirs {
             debug!("Checking dir entry: {}", dir.path().display());
@@ -142,14 +117,21 @@ impl<'a> CleanAction<'a> {
                 .expect("package sub directory name ended with \"..\" which is not expected")
                 .to_string_lossy();
 
+            found_at_least_one_project = true;
             debug!("Cleaning package(s) in dir {sub_dir}");
-            if let Err(e) = self.run_cargo_clean(&dir.path()) {
+            if let Err(e) = self.run_cargo_clean(&working_dir_path) {
                 failed_at_least_one_project = true;
                 err!(
                     "Error cleaning project: {sub_dir}, error: {:?}",
                     anyhow::Error::new(e)
                 );
             }
+        }
+
+        if !found_at_least_one_project {
+            return Err(CleanActionError::NoValidRustProjectsInTheDirectory(
+                self.working_dir.clone(),
+            ));
         }
 
         debug!("Done cleaning package(s) in {}", self.working_dir.display());
