@@ -174,14 +174,12 @@ fn emulated_workspace_builds_successfully() {
     let umdf_driver_workspace_path = format!("{emulated_workspace_path}/umdf-driver-workspace");
     with_mutex(emulated_workspace_path, || {
         run_clean_cmd(emulated_workspace_path);
-        assert_target_dir_does_not_exist(&umdf_driver_workspace_path);
-        assert_target_dir_does_not_exist(&format!("{emulated_workspace_path}/rust-project"));
-        assert_package_dir_does_not_exist(&umdf_driver_workspace_path, "driver_1", None, "debug");
-        assert_package_dir_does_not_exist(&umdf_driver_workspace_path, "driver_2", None, "debug");
+
         let stderr = run_build_cmd(emulated_workspace_path, None, None);
         assert!(stderr.contains("Building package driver_1"));
         assert!(stderr.contains("Building package driver_2"));
         assert!(stderr.contains("Build completed successfully"));
+
         verify_driver_package_files(
             &umdf_driver_workspace_path,
             "driver_1",
@@ -198,6 +196,12 @@ fn emulated_workspace_builds_successfully() {
             None,
             None,
         );
+
+        run_clean_cmd(emulated_workspace_path);
+        assert_target_dir_does_not_exist(&umdf_driver_workspace_path);
+        assert_target_dir_does_not_exist(&format!("{emulated_workspace_path}/rust-project"));
+        assert_package_dir_does_not_exist(&umdf_driver_workspace_path, "driver_1", None, "debug");
+        assert_package_dir_does_not_exist(&umdf_driver_workspace_path, "driver_2", None, "debug");
     });
 }
 
@@ -306,13 +310,6 @@ fn clean_build_and_verify_project(
     let mutex_name = project_path.clone();
     with_mutex(&mutex_name, || {
         run_clean_cmd(&project_path);
-        assert_target_dir_does_not_exist(&project_path);
-        assert_package_dir_does_not_exist(
-            &project_path,
-            driver_name,
-            target_arch_for_verification.and_then(to_target_triple),
-            profile.unwrap_or("debug"),
-        );
 
         let mut args: Vec<&str> = Vec::new();
         if let Some(target_arch) = input_target_arch {
@@ -348,6 +345,15 @@ fn clean_build_and_verify_project(
             driver_version,
             target_triple,
             profile,
+        );
+
+        run_clean_cmd(&project_path);
+        assert_target_dir_does_not_exist(&project_path);
+        assert_package_dir_does_not_exist(
+            &project_path,
+            driver_name,
+            target_triple,
+            profile.unwrap_or("debug"),
         );
     });
 }
