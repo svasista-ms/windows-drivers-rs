@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation
 // License: MIT OR Apache-2.0
 
-#![allow(clippy::ref_option_ref)] // This is suppressed for mockall as it generates mocks with env_vars: &Option
-
 use std::{
     os::windows::process::ExitStatusExt,
     path::PathBuf,
