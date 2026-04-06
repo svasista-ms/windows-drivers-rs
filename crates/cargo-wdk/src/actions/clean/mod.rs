@@ -17,6 +17,8 @@ use tracing::{debug, error as err, info};
 use crate::providers::{exec::CommandExec, fs::Fs};
 use crate::trace;
 
+/// Action that removes build artifacts produced by the `build` command for a
+/// driver project or emulated workspace.
 pub struct CleanAction<'a> {
     working_dir: PathBuf,
     verbosity_level: clap_verbosity_flag::Verbosity,
