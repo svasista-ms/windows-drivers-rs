@@ -50,6 +50,10 @@ impl<'a> CleanAction<'a> {
         command_exec: &'a CommandExec,
         fs: &'a Fs,
     ) -> Result<Self> {
+        anyhow::ensure!(
+            !working_dir.as_os_str().is_empty(),
+            "working_dir must not be empty"
+        );
         Ok(Self {
             working_dir: absolute(working_dir)?,
             verbosity_level,
