@@ -40,7 +40,7 @@ fn new_succeeds_for_valid_args() {
 }
 
 #[test]
-fn new_fails_for_empty_path() {
+fn new_fails_if_working_dir_is_empty() {
     let cwd = PathBuf::from("");
     let mock_fs = Fs::default();
     let mock_exec = CommandExec::default();
@@ -124,7 +124,7 @@ fn run_returns_error_when_cargo_clean_fails() {
 }
 
 #[test]
-fn run_returns_error_when_no_cargo_toml_and_no_rust_projects() {
+fn run_returns_error_when_no_cargo_toml_and_no_rust_projects_are_found() {
     let cwd = PathBuf::from("C:\\tmp");
     let mut mock_fs = Fs::default();
     let mock_exec = CommandExec::default();
