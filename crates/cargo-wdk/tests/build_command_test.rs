@@ -174,6 +174,8 @@ fn emulated_workspace_builds_successfully() {
     let umdf_driver_workspace_path = format!("{emulated_workspace_path}/umdf-driver-workspace");
     with_mutex(emulated_workspace_path, || {
         run_clean_cmd(emulated_workspace_path);
+        assert_target_dir_does_not_exist(&umdf_driver_workspace_path);
+        assert_target_dir_does_not_exist(&format!("{emulated_workspace_path}/rust-project"));
 
         let stderr = run_build_cmd(emulated_workspace_path, None, None);
         assert!(stderr.contains("Building package driver_1"));
@@ -310,6 +312,7 @@ fn clean_build_and_verify_project(
     let mutex_name = project_path.clone();
     with_mutex(&mutex_name, || {
         run_clean_cmd(&project_path);
+        assert_target_dir_does_not_exist(&project_path);
 
         let mut args: Vec<&str> = Vec::new();
         if let Some(target_arch) = input_target_arch {
