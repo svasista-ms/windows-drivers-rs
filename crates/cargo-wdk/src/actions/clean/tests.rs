@@ -10,7 +10,7 @@ use std::{
 use mockall::predicate::eq;
 use mockall_double::double;
 
-use super::CleanAction;
+use super::{CleanAction, error::CleanActionError};
 use crate::providers::error::CommandError;
 #[double]
 use crate::providers::{exec::CommandExec, fs::Fs};
@@ -120,7 +120,8 @@ fn run_returns_error_when_cargo_clean_fails() {
     )
     .expect("CleanAction::new should succeed");
 
-    assert!(action.run().is_err());
+    let result = action.run();
+    assert!(matches!(result, Err(CleanActionError::CargoClean(_))));
 }
 
 #[test]
@@ -144,5 +145,9 @@ fn run_returns_error_when_no_cargo_toml_and_no_rust_projects_are_found() {
     )
     .expect("CleanAction::new should succeed");
 
-    assert!(action.run().is_err());
+    let result = action.run();
+    assert!(matches!(
+        result,
+        Err(CleanActionError::NoValidRustProjectsInTheDirectory(_))
+    ));
 }
