@@ -85,6 +85,10 @@ impl<'a> BuildAction<'a> {
         metadata: &'a Metadata,
     ) -> Result<Self> {
         // TODO: validate params
+        anyhow::ensure!(
+            !params.working_dir.as_os_str().is_empty(),
+            "working_dir must not be empty"
+        );
         Ok(Self {
             working_dir: absolute(params.working_dir)?,
             profile: params.profile,
