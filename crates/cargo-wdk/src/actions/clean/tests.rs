@@ -52,7 +52,10 @@ fn new_fails_if_working_dir_is_empty() {
         &mock_fs,
     );
 
-    assert!(action.is_err());
+    let err = action
+        .err()
+        .expect("CleanAction::new should fail for empty working_dir");
+    assert_eq!(err.to_string(), "working_dir must not be empty");
 }
 
 #[test]
