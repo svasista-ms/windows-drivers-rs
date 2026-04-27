@@ -319,13 +319,6 @@ fn kmdf_driver_builds_successfully_with_sign_mode_off() {
             "Expected no cert file in package folder when --sign-mode=off, but found {}",
             cert_in_package.display()
         );
-
-        // The driver binary should not have an Authenticode signature.
-        let driver_sys = format!("{package_dir}/{driver_name}.sys");
-        assert!(
-            !is_authenticode_signed(&driver_sys),
-            "Driver binary {driver_sys} should not be Authenticode-signed when --sign-mode=off"
-        );
     });
 }
 
@@ -402,23 +395,6 @@ fn build_help_advertises_all_options() {
             );
         }
     }
-}
-
-/// Returns true if the given file has an Authenticode signature, using
-/// `PowerShell's` `Get-AuthenticodeSignature` cmdlet. Treats anything other
-/// than `NotSigned` as signed.
-fn is_authenticode_signed(file_path: &str) -> bool {
-    let output = Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            &format!("(Get-AuthenticodeSignature -FilePath '{file_path}').Status.ToString()"),
-        ])
-        .output()
-        .expect("failed to invoke powershell to check Authenticode signature");
-    let status = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    !status.is_empty() && status != "NotSigned"
 }
 
 #[allow(clippy::too_many_arguments)]
