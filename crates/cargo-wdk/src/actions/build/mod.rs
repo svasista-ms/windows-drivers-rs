@@ -29,7 +29,7 @@ use wdk_build::{
     metadata::{TryFromCargoMetadataError, Wdk},
 };
 
-use crate::actions::Profile;
+use crate::actions::{Profile, SignMode};
 #[double]
 use crate::providers::{exec::CommandExec, fs::Fs, metadata::Metadata, wdk_build::WdkBuild};
 
@@ -38,6 +38,7 @@ pub struct BuildActionParams<'a> {
     pub profile: Option<&'a Profile>,
     pub target_arch: Option<CpuArchitecture>,
     pub verify_signature: bool,
+    pub sign_mode: SignMode,
     pub is_sample_class: bool,
     pub verbosity_level: clap_verbosity_flag::Verbosity,
 }
@@ -49,6 +50,7 @@ pub struct BuildAction<'a> {
     profile: Option<&'a Profile>,
     target_arch: Option<CpuArchitecture>,
     verify_signature: bool,
+    sign_mode: SignMode,
     is_sample_class: bool,
     verbosity_level: clap_verbosity_flag::Verbosity,
 
@@ -90,6 +92,7 @@ impl<'a> BuildAction<'a> {
             profile: params.profile,
             target_arch: params.target_arch,
             verify_signature: params.verify_signature,
+            sign_mode: params.sign_mode,
             is_sample_class: params.is_sample_class,
             verbosity_level: params.verbosity_level,
             wdk_build,
@@ -386,6 +389,7 @@ impl<'a> BuildAction<'a> {
                 target_dir: &target_dir,
                 target_arch: &target_arch,
                 verify_signature: self.verify_signature,
+                sign_mode: self.sign_mode,
                 sample_class: self.is_sample_class,
                 driver_model,
             },

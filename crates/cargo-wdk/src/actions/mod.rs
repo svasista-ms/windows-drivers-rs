@@ -50,6 +50,42 @@ impl Display for Profile {
     }
 }
 
+/// Driver signing mode used during the package phase.
+///
+/// * `Off` - Skip all signing-related steps (certificate generation, signing,
+///   and signature verification).
+/// * `Test` - Use test-signing, which currently auto-generates a self-signed
+///   certificate (`WDRLocalTestCert` in the `WDRTestCertStore` store) and signs
+///   the driver binary and catalog file with it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SignMode {
+    Off,
+    #[default]
+    Test,
+}
+
+impl FromStr for SignMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "off" => std::result::Result::Ok(Self::Off),
+            "test" => std::result::Result::Ok(Self::Test),
+            _ => Err(format!("'{s}' is not a valid sign mode")),
+        }
+    }
+}
+
+impl Display for SignMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Self::Off => "off",
+            Self::Test => "test",
+        };
+        write!(f, "{s}")
+    }
+}
+
 /// Converts `CpuArchitecture` to its corresponding target triple name.
 #[must_use]
 pub fn to_target_triple(cpu_arch: CpuArchitecture) -> String {

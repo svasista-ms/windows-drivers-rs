@@ -15,6 +15,7 @@ use crate::actions::{
     DriverType,
     KMDF_STR,
     Profile,
+    SignMode,
     UMDF_STR,
     WDM_STR,
     build::{BuildAction, BuildActionParams},
@@ -89,6 +90,12 @@ pub struct BuildArgs {
     #[arg(long)]
     pub verify_signature: bool,
 
+    /// Driver signing mode. Use `Test` (default) to sign with an
+    /// auto-generated self-signed certificate, or `Off` to skip signing
+    /// entirely.
+    #[arg(long, ignore_case = true, default_value_t = SignMode::Test)]
+    pub sign_mode: SignMode,
+
     /// Build sample class driver project
     #[arg(long)]
     pub sample: bool,
@@ -161,12 +168,18 @@ impl Cli {
                 Ok(())
             }
             Subcmd::Build(cli_args) => {
+                if cli_args.sign_mode == SignMode::Off && cli_args.verify_signature {
+                    return Err(anyhow::anyhow!(
+                        "`--verify-signature` cannot be used with `--sign-mode=off`."
+                    ));
+                }
                 BuildAction::new(
                     &BuildActionParams {
                         working_dir: Path::new("."), // Using current dir as working dir
                         profile: cli_args.profile.as_ref(),
                         target_arch: cli_args.target_arch,
                         verify_signature: cli_args.verify_signature,
+                        sign_mode: cli_args.sign_mode,
                         is_sample_class: cli_args.sample,
                         verbosity_level: self.verbose,
                     },
@@ -242,6 +255,34 @@ mod tests {
         assert_eq!(
             result.err().unwrap().to_string(),
             "Extended/Verbatim paths (i.e. paths starting with '\\?') are not currently supported"
+        );
+    }
+
+    #[test]
+    fn build_rejects_verify_signature_when_sign_mode_is_off() {
+        use crate::{
+            actions::SignMode,
+            cli::{BuildArgs, Subcmd},
+        };
+
+        let cli = Cli {
+            cargo_command: "wdk".to_string(),
+            sub_cmd: Subcmd::Build(BuildArgs {
+                profile: None,
+                target_arch: None,
+                verify_signature: true,
+                sign_mode: SignMode::Off,
+                sample: false,
+            }),
+            verbose: clap_verbosity_flag::Verbosity::default(),
+        };
+
+        let result = cli.run();
+        assert!(result.is_err());
+        let err = result.err().unwrap().to_string();
+        assert!(
+            err.contains("--verify-signature") && err.contains("--sign-mode=off"),
+            "unexpected error: {err}"
         );
     }
 }

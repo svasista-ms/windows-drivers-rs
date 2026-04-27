@@ -287,6 +287,140 @@ mod kmdf_driver_with_target_override {
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/// Sign-mode integration tests
+////////////////////////////////////////////////////////////////////////////////
+
+#[test]
+fn kmdf_driver_builds_successfully_with_sign_mode_off() {
+    let driver = "kmdf-driver";
+    let project_path = format!("tests/{driver}");
+    with_mutex(&project_path, || {
+        run_cargo_clean(&project_path);
+
+        let stderr = run_build_cmd(&project_path, Some(&["--sign-mode", "off"]), None);
+        assert!(stderr.contains(&format!("Building package {driver}")));
+        assert!(stderr.contains(&format!("Finished building {driver}")));
+
+        let driver_name = driver.replace('-', "_");
+        let target_dir = format!("{project_path}/target/debug");
+        let package_dir = format!("{target_dir}/{driver_name}_package");
+
+        // Standard package contents are still produced.
+        assert_dir_exists(&package_dir);
+        for ext in ["cat", "inf", "map", "pdb", "sys"] {
+            assert_file_exists(&format!("{package_dir}/{driver_name}.{ext}"));
+        }
+
+        // No certificate is copied into the package folder.
+        let cert_in_package = PathBuf::from(format!("{package_dir}/WDRLocalTestCert.cer"));
+        assert!(
+            !cert_in_package.exists(),
+            "Expected no cert file in package folder when --sign-mode=off, but found {}",
+            cert_in_package.display()
+        );
+
+        // The driver binary should not have an Authenticode signature.
+        let driver_sys = format!("{package_dir}/{driver_name}.sys");
+        assert!(
+            !is_authenticode_signed(&driver_sys),
+            "Driver binary {driver_sys} should not be Authenticode-signed when --sign-mode=off"
+        );
+    });
+}
+
+#[test]
+fn sign_mode_off_does_not_produce_cert_file_in_target_dir() {
+    let driver = "kmdf-driver";
+    let project_path = format!("tests/{driver}");
+    with_mutex(&project_path, || {
+        run_cargo_clean(&project_path);
+
+        let _ = run_build_cmd(&project_path, Some(&["--sign-mode", "off"]), None);
+
+        let staged_cert =
+            PathBuf::from(format!("{project_path}/target/debug/WDRLocalTestCert.cer"));
+        assert!(
+            !staged_cert.exists(),
+            "Expected no staged cert file under target dir when --sign-mode=off, but found {}",
+            staged_cert.display()
+        );
+    });
+}
+
+/// `--sign-mode=off` together with `--verify-signature` is rejected at the CLI
+/// layer
+#[test]
+fn sign_mode_off_with_verify_signature_is_rejected() {
+    let driver = "kmdf-driver";
+    let project_path = format!("tests/{driver}");
+    let mut cmd = create_cargo_wdk_cmd(
+        "build",
+        Some(&["--sign-mode", "off", "--verify-signature"]),
+        None,
+        Some(&project_path),
+    );
+    let assertion = cmd.assert().failure();
+    let stderr = String::from_utf8_lossy(&assertion.get_output().stderr).to_string();
+    assert!(
+        stderr.contains("--verify-signature") && stderr.contains("--sign-mode=off"),
+        "expected validation error mentioning both flags, got: {stderr}"
+    );
+}
+
+/// `cargo wdk build --help` must advertise every supported option. Adding a
+/// new option to the `build` subcommand should also be reflected here so that
+/// future regressions (e.g., a flag accidentally hidden or removed) are caught
+/// at the CLI surface.
+#[test]
+fn build_help_advertises_all_options() {
+    let mut cmd = create_cargo_wdk_cmd("build", Some(&["--help"]), None, None::<&str>);
+    let assertion = cmd.assert().success();
+    let stdout = String::from_utf8_lossy(&assertion.get_output().stdout).to_string();
+
+    // (flag, optional substring that must also appear on/near the flag's help
+    // line, e.g. its default value)
+    let expected_options: &[(&str, Option<&str>)] = &[
+        ("--profile", None),
+        ("--target-arch", None),
+        ("--verify-signature", None),
+        ("--sign-mode", Some("[default: test]")),
+        ("--sample", None),
+        ("--help", None),
+    ];
+
+    for (flag, extra) in expected_options {
+        assert!(
+            stdout.contains(flag),
+            "expected `{flag}` in `cargo wdk build --help` output:\n{stdout}"
+        );
+        if let Some(extra) = extra {
+            assert!(
+                stdout.contains(extra),
+                "expected `{extra}` (associated with `{flag}`) in `cargo wdk build --help` \
+                 output:\n{stdout}"
+            );
+        }
+    }
+}
+
+/// Returns true if the given file has an Authenticode signature, using
+/// `PowerShell's` `Get-AuthenticodeSignature` cmdlet. Treats anything other
+/// than `NotSigned` as signed.
+fn is_authenticode_signed(file_path: &str) -> bool {
+    let output = Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            &format!("(Get-AuthenticodeSignature -FilePath '{file_path}').Status.ToString()"),
+        ])
+        .output()
+        .expect("failed to invoke powershell to check Authenticode signature");
+    let status = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    !status.is_empty() && status != "NotSigned"
+}
+
 #[allow(clippy::too_many_arguments)]
 fn clean_build_and_verify_project(
     driver_type: &str,
