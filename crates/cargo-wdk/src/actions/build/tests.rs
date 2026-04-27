@@ -350,6 +350,48 @@ pub fn given_a_sample_class_driver_project_when_sign_mode_is_off_then_signing_is
     );
 }
 
+// Given: A driver project
+// When: --sign-mode=off and --verify-signature=true are both provided
+// Then: Defensive guard in PackageTask::run() takes effect — signtool verify
+// is skipped (the CLI normally rejects this combo, but the package task
+// itself must not invoke verification when there is nothing signed).
+#[test]
+pub fn given_a_driver_project_when_sign_mode_is_off_and_verify_signature_is_true_then_verification_is_skipped()
+ {
+    // Input CLI args
+    let cwd = PathBuf::from("C:\\tmp");
+    let profile = None;
+    let target_arch = CpuArchitecture::Amd64;
+    let verify_signature = true;
+    let sample_class = false;
+
+    // Driver project data
+    let driver_type = "KMDF";
+    let driver_name = "sample-kmdf";
+    let driver_version = "0.0.1";
+    let wdk_metadata = get_cargo_metadata_wdk_metadata(driver_type, 1, 33);
+    let (workspace_member, package) =
+        get_cargo_metadata_package(&cwd, driver_name, driver_version, Some(&wdk_metadata));
+
+    let cargo_build_output =
+        create_cargo_build_output_json(driver_name, driver_version, &cwd, None, profile);
+    let test_build_action = &TestBuildAction::new(cwd.clone(), profile, None, sample_class)
+        .with_sign_mode(SignMode::Off)
+        .set_up_standalone_driver_project((workspace_member, package))
+        .expect_default_build_task_steps(driver_name, Some(cargo_build_output))
+        .expect_probe_target_arch_using_cargo_rustc(&cwd, target_arch, None)
+        .expect_package_task_steps_with_sign_mode_off(driver_name, driver_type, target_arch);
+
+    assert_build_action_run_with_env_is_success(
+        &cwd,
+        profile,
+        None,
+        verify_signature,
+        sample_class,
+        test_build_action,
+    );
+}
+
 #[test]
 pub fn given_a_driver_project_when_self_signed_exists_then_it_should_skip_calling_makecert() {
     // Input CLI args

@@ -263,7 +263,7 @@ impl<'a> PackageTask<'a> {
         }
         self.run_infverif()?;
         // Verify signatures only when --verify-signature flag = true is passed
-        // and signing was performed (sign mode is not 'Off').
+        // and signing was done (sign mode is not 'Off').
         if self.verify_signature {
             if matches!(self.sign_mode, SignMode::Off) {
                 warn!("Skipping signature verification because sign mode is 'Off'");
