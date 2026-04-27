@@ -104,8 +104,6 @@ impl<'a> CleanAction<'a> {
             self.working_dir.display()
         );
 
-        info!("Cleaning package(s) in {}", self.working_dir.display());
-
         let mut found_at_least_one_project = false;
         let mut failed_at_least_one_project = false;
         for dir in dirs {
@@ -121,6 +119,9 @@ impl<'a> CleanAction<'a> {
             let sub_dir = dir.file_name();
             let sub_dir = sub_dir.to_string_lossy();
 
+            if !found_at_least_one_project {
+                info!("Cleaning package(s) in {}", self.working_dir.display());
+            }
             found_at_least_one_project = true;
             debug!("Cleaning package(s) in dir {sub_dir}");
             if let Err(e) = self.run_cargo_clean(&working_dir_path) {
