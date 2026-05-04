@@ -155,14 +155,13 @@ impl<'a> BuildAction<'a> {
         );
 
         let mut is_valid_dir_with_rust_projects = false;
-        for dir in &dirs {
-            if self.fs.dir_file_type(dir)?.is_dir()
-                && self.fs.exists(&dir.path().join("Cargo.toml"))
-            {
+        for entry in &dirs {
+            if entry.is_dir && self.fs.exists(&entry.path.join("Cargo.toml")) {
                 debug!(
                     "Found atleast one valid Rust project directory: {}, continuing with the \
                      build flow",
-                    dir.path()
+                    entry
+                        .path
                         .file_name()
                         .expect(
                             "package sub directory name ended with \"..\" which is not expected"
@@ -183,23 +182,21 @@ impl<'a> BuildAction<'a> {
         info!("Building packages in {}", self.working_dir.display());
 
         let mut failed_atleast_one_project = false;
-        for dir in dirs {
-            debug!("Checking dir entry: {}", dir.path().display());
-            if !self.fs.dir_file_type(&dir)?.is_dir()
-                || !self.fs.exists(&dir.path().join("Cargo.toml"))
-            {
+        for entry in dirs {
+            debug!("Checking dir entry: {}", entry.path.display());
+            if !entry.is_dir || !self.fs.exists(&entry.path.join("Cargo.toml")) {
                 debug!("Dir entry is not a valid Rust package");
                 continue;
             }
 
-            let working_dir_path = dir.path(); // Avoids a short-lived temporary
+            let working_dir_path = entry.path;
             let sub_dir = working_dir_path
                 .file_name()
                 .expect("package sub directory name ended with \"..\" which is not expected")
                 .to_string_lossy();
 
             debug!("Building package(s) in dir {sub_dir}");
-            if let Err(e) = self.run_from_workspace_root(&dir.path()) {
+            if let Err(e) = self.run_from_workspace_root(&working_dir_path) {
                 failed_atleast_one_project = true;
                 err!(
                     "Error building project: {sub_dir}, error: {:?}",

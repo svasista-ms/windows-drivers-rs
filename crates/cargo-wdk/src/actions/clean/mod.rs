@@ -104,18 +104,18 @@ impl<'a> CleanAction<'a> {
 
         let mut found_at_least_one_project = false;
         let mut failed_at_least_one_project = false;
-        for dir in dirs {
-            debug!("Checking dir entry: {}", dir.path().display());
-            if !self.fs.dir_file_type(&dir)?.is_dir()
-                || !self.fs.exists(&dir.path().join("Cargo.toml"))
-            {
+        for entry in dirs {
+            debug!("Checking dir entry: {}", entry.path.display());
+            if !entry.is_dir || !self.fs.exists(&entry.path.join("Cargo.toml")) {
                 debug!("Dir entry is not a valid Rust package");
                 continue;
             }
 
-            let working_dir_path = dir.path();
-            let sub_dir = dir.file_name();
-            let sub_dir = sub_dir.to_string_lossy();
+            let working_dir_path = entry.path;
+            let sub_dir = working_dir_path
+                .file_name()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default();
 
             if !found_at_least_one_project {
                 info!("Cleaning package(s) in {}", self.working_dir.display());
@@ -169,8 +169,9 @@ impl<'a> CleanAction<'a> {
 #[cfg(test)]
 mod tests {
     use std::{
+        io,
         os::windows::process::ExitStatusExt,
-        path::PathBuf,
+        path::{Path, PathBuf},
         process::{ExitStatus, Output},
     };
 
@@ -178,11 +179,14 @@ mod tests {
     use mockall_double::double;
 
     use super::{CleanAction, error::CleanActionError};
-    use crate::providers::error::CommandError;
+    use crate::providers::{
+        error::{CommandError, FileError},
+        fs::DirEntryInfo,
+    };
     #[double]
     use crate::providers::{exec::CommandExec, fs::Fs};
 
-    fn create_successful_output() -> Output {
+    fn ok_output() -> Output {
         Output {
             status: ExitStatus::from_raw(0),
             stdout: Vec::new(),
@@ -190,135 +194,228 @@ mod tests {
         }
     }
 
+    fn cargo_clean_err() -> CommandError {
+        CommandError::CommandFailed {
+            command: "cargo".to_string(),
+            args: vec!["clean".to_string()],
+            stdout: "boom".to_string(),
+        }
+    }
+
+    /// Sets up `Fs::exists(<dir>/Cargo.toml) -> exists`.
+    fn mock_cargo_toml(fs: &mut Fs, dir: &Path, exists: bool) {
+        fs.expect_exists()
+            .with(eq(dir.join("Cargo.toml")))
+            .returning(move |_| exists);
+    }
+
+    /// Sets up `Fs::read_dir_entries(...) -> Ok(entries)` where each entry is
+    /// `(name relative to working dir, is_dir)`.
+    fn mock_read_dir(fs: &mut Fs, working_dir: &Path, entries: &[(&str, bool)]) {
+        let entries: Vec<DirEntryInfo> = entries
+            .iter()
+            .map(|(name, is_dir)| DirEntryInfo {
+                path: working_dir.join(name),
+                is_dir: *is_dir,
+            })
+            .collect();
+        fs.expect_read_dir_entries()
+            .returning(move |_| Ok(entries.clone()));
+    }
+
+    /// Sets up an expectation for `cargo clean` invoked at `dir`.
+    fn mock_cargo_clean(exec: &mut CommandExec, dir: &Path, ok: bool) {
+        let dir = dir.to_owned();
+        exec.expect_run()
+            .withf(move |cmd, args, _env, working_dir| {
+                cmd == "cargo" && args == ["clean"] && *working_dir == Some(dir.as_path())
+            })
+            .returning(move |_, _, _, _| {
+                if ok {
+                    Ok(ok_output())
+                } else {
+                    Err(cargo_clean_err())
+                }
+            });
+    }
+
+    fn run_action(cwd: &Path, fs: &Fs, exec: &CommandExec) -> Result<(), CleanActionError> {
+        CleanAction::new(cwd, clap_verbosity_flag::Verbosity::default(), exec, fs)
+            .expect("CleanAction::new should succeed")
+            .run()
+    }
+
     #[test]
     fn new_succeeds_for_valid_args() {
         let cwd = PathBuf::from("C:\\tmp");
-        let mock_fs = Fs::default();
-        let mock_exec = CommandExec::default();
-
-        let action = CleanAction::new(
-            &cwd,
-            clap_verbosity_flag::Verbosity::default(),
-            &mock_exec,
-            &mock_fs,
+        let fs = Fs::default();
+        let exec = CommandExec::default();
+        assert!(
+            CleanAction::new(&cwd, clap_verbosity_flag::Verbosity::default(), &exec, &fs,).is_ok()
         );
-
-        assert!(action.is_ok());
     }
 
     #[test]
     fn new_fails_if_working_dir_is_empty() {
         let cwd = PathBuf::from("");
-        let mock_fs = Fs::default();
-        let mock_exec = CommandExec::default();
-
-        let action = CleanAction::new(
-            &cwd,
-            clap_verbosity_flag::Verbosity::default(),
-            &mock_exec,
-            &mock_fs,
-        );
-
-        let err = action
+        let fs = Fs::default();
+        let exec = CommandExec::default();
+        let err = CleanAction::new(&cwd, clap_verbosity_flag::Verbosity::default(), &exec, &fs)
             .err()
             .expect("CleanAction::new should fail for empty working_dir");
         assert_eq!(err.to_string(), "working_dir must not be empty");
     }
 
+    // ---- standalone driver / workspace root ---------------------------------
+
     #[test]
     fn run_invokes_cargo_clean_and_succeeds() {
         let cwd = PathBuf::from("C:\\tmp");
-        let mut mock_fs = Fs::default();
-        let mut mock_exec = CommandExec::default();
-
-        mock_fs
-            .expect_exists()
-            .with(eq(cwd.join("Cargo.toml")))
-            .returning(|_| true);
-
-        mock_exec
-            .expect_run()
-            .withf(move |cmd, args, _env, working_dir| {
-                cmd == "cargo"
-                    && args == ["clean"]
-                    && *working_dir == Some(PathBuf::from("C:\\tmp").as_path())
-            })
-            .returning(|_, _, _, _| Ok(create_successful_output()));
-
-        let action = CleanAction::new(
-            &cwd,
-            clap_verbosity_flag::Verbosity::default(),
-            &mock_exec,
-            &mock_fs,
-        )
-        .expect("CleanAction::new should succeed");
-
-        assert!(action.run().is_ok());
+        let mut fs = Fs::default();
+        let mut exec = CommandExec::default();
+        mock_cargo_toml(&mut fs, &cwd, true);
+        mock_cargo_clean(&mut exec, &cwd, true);
+        assert!(run_action(&cwd, &fs, &exec).is_ok());
     }
 
     #[test]
     fn run_returns_error_when_cargo_clean_fails() {
         let cwd = PathBuf::from("C:\\tmp");
-        let mut mock_fs = Fs::default();
-        let mut mock_exec = CommandExec::default();
-
-        mock_fs
-            .expect_exists()
-            .with(eq(cwd.join("Cargo.toml")))
-            .returning(|_| true);
-
-        mock_exec
-            .expect_run()
-            .withf(move |cmd, args, _env, working_dir| {
-                cmd == "cargo"
-                    && args == ["clean"]
-                    && *working_dir == Some(PathBuf::from("C:\\tmp").as_path())
-            })
-            .returning(|_, _, _, _| {
-                Err(CommandError::CommandFailed {
-                    command: "cargo".to_string(),
-                    args: vec!["clean".to_string()],
-                    stdout: "error".to_string(),
-                })
-            });
-
-        let action = CleanAction::new(
-            &cwd,
-            clap_verbosity_flag::Verbosity::default(),
-            &mock_exec,
-            &mock_fs,
-        )
-        .expect("CleanAction::new should succeed");
-
-        let result = action.run();
-        assert!(matches!(result, Err(CleanActionError::CargoClean(_))));
+        let mut fs = Fs::default();
+        let mut exec = CommandExec::default();
+        mock_cargo_toml(&mut fs, &cwd, true);
+        mock_cargo_clean(&mut exec, &cwd, false);
+        assert!(matches!(
+            run_action(&cwd, &fs, &exec),
+            Err(CleanActionError::CargoClean(_))
+        ));
     }
+
+    // ---- emulated workspace -------------------------------------------------
 
     #[test]
     fn run_returns_error_when_no_cargo_toml_and_no_rust_projects_are_found() {
         let cwd = PathBuf::from("C:\\tmp");
-        let mut mock_fs = Fs::default();
-        let mock_exec = CommandExec::default();
-
-        mock_fs
-            .expect_exists()
-            .with(eq(cwd.join("Cargo.toml")))
-            .returning(|_| false);
-
-        mock_fs.expect_read_dir_entries().returning(|_| Ok(vec![]));
-
-        let action = CleanAction::new(
-            &cwd,
-            clap_verbosity_flag::Verbosity::default(),
-            &mock_exec,
-            &mock_fs,
-        )
-        .expect("CleanAction::new should succeed");
-
-        let result = action.run();
+        let mut fs = Fs::default();
+        let exec = CommandExec::default();
+        mock_cargo_toml(&mut fs, &cwd, false);
+        mock_read_dir(&mut fs, &cwd, &[]);
         assert!(matches!(
-            result,
+            run_action(&cwd, &fs, &exec),
             Err(CleanActionError::NoValidRustProjectsInTheDirectory(_))
+        ));
+    }
+
+    #[test]
+    fn run_cleans_single_rust_project_in_emulated_workspace() {
+        let cwd = PathBuf::from("C:\\tmp");
+        let pkg_a = cwd.join("pkg-a");
+        let mut fs = Fs::default();
+        let mut exec = CommandExec::default();
+        mock_cargo_toml(&mut fs, &cwd, false);
+        mock_read_dir(&mut fs, &cwd, &[("pkg-a", true)]);
+        mock_cargo_toml(&mut fs, &pkg_a, true);
+        mock_cargo_clean(&mut exec, &pkg_a, true);
+        assert!(run_action(&cwd, &fs, &exec).is_ok());
+    }
+
+    #[test]
+    fn run_cleans_multiple_rust_projects_in_emulated_workspace() {
+        let cwd = PathBuf::from("C:\\tmp");
+        let pkg_a = cwd.join("pkg-a");
+        let pkg_b = cwd.join("pkg-b");
+        let mut fs = Fs::default();
+        let mut exec = CommandExec::default();
+        mock_cargo_toml(&mut fs, &cwd, false);
+        mock_read_dir(&mut fs, &cwd, &[("pkg-a", true), ("pkg-b", true)]);
+        mock_cargo_toml(&mut fs, &pkg_a, true);
+        mock_cargo_toml(&mut fs, &pkg_b, true);
+        mock_cargo_clean(&mut exec, &pkg_a, true);
+        mock_cargo_clean(&mut exec, &pkg_b, true);
+        assert!(run_action(&cwd, &fs, &exec).is_ok());
+    }
+
+    #[test]
+    fn run_skips_non_directory_entries_in_emulated_workspace() {
+        let cwd = PathBuf::from("C:\\tmp");
+        let pkg_a = cwd.join("pkg-a");
+        let mut fs = Fs::default();
+        let mut exec = CommandExec::default();
+        mock_cargo_toml(&mut fs, &cwd, false);
+        // README.md (is_dir=false) is filtered out before any Cargo.toml probe.
+        mock_read_dir(&mut fs, &cwd, &[("README.md", false), ("pkg-a", true)]);
+        mock_cargo_toml(&mut fs, &pkg_a, true);
+        mock_cargo_clean(&mut exec, &pkg_a, true);
+        assert!(run_action(&cwd, &fs, &exec).is_ok());
+    }
+
+    #[test]
+    fn run_skips_directories_without_cargo_toml_in_emulated_workspace() {
+        let cwd = PathBuf::from("C:\\tmp");
+        let docs = cwd.join("docs");
+        let pkg_a = cwd.join("pkg-a");
+        let mut fs = Fs::default();
+        let mut exec = CommandExec::default();
+        mock_cargo_toml(&mut fs, &cwd, false);
+        mock_read_dir(&mut fs, &cwd, &[("docs", true), ("pkg-a", true)]);
+        mock_cargo_toml(&mut fs, &docs, false);
+        mock_cargo_toml(&mut fs, &pkg_a, true);
+        mock_cargo_clean(&mut exec, &pkg_a, true);
+        assert!(run_action(&cwd, &fs, &exec).is_ok());
+    }
+
+    #[test]
+    fn run_returns_error_when_no_subdir_has_cargo_toml() {
+        let cwd = PathBuf::from("C:\\tmp");
+        let docs = cwd.join("docs");
+        let scripts = cwd.join("scripts");
+        let mut fs = Fs::default();
+        let exec = CommandExec::default();
+        mock_cargo_toml(&mut fs, &cwd, false);
+        mock_read_dir(&mut fs, &cwd, &[("docs", true), ("scripts", true)]);
+        mock_cargo_toml(&mut fs, &docs, false);
+        mock_cargo_toml(&mut fs, &scripts, false);
+        assert!(matches!(
+            run_action(&cwd, &fs, &exec),
+            Err(CleanActionError::NoValidRustProjectsInTheDirectory(_))
+        ));
+    }
+
+    #[test]
+    fn run_returns_error_when_one_subproject_fails_to_clean_in_emulated_workspace() {
+        let cwd = PathBuf::from("C:\\tmp");
+        let pkg_ok = cwd.join("pkg-ok");
+        let pkg_bad = cwd.join("pkg-bad");
+        let mut fs = Fs::default();
+        let mut exec = CommandExec::default();
+        mock_cargo_toml(&mut fs, &cwd, false);
+        mock_read_dir(&mut fs, &cwd, &[("pkg-ok", true), ("pkg-bad", true)]);
+        mock_cargo_toml(&mut fs, &pkg_ok, true);
+        mock_cargo_toml(&mut fs, &pkg_bad, true);
+        mock_cargo_clean(&mut exec, &pkg_ok, true);
+        mock_cargo_clean(&mut exec, &pkg_bad, false);
+        assert!(matches!(
+            run_action(&cwd, &fs, &exec),
+            Err(CleanActionError::OneOrMoreRustProjectsFailedToClean(_))
+        ));
+    }
+
+    #[test]
+    fn run_returns_error_when_read_dir_entries_fails() {
+        let cwd = PathBuf::from("C:\\tmp");
+        let mut fs = Fs::default();
+        let exec = CommandExec::default();
+        mock_cargo_toml(&mut fs, &cwd, false);
+        let cwd_clone = cwd.clone();
+        fs.expect_read_dir_entries().returning(move |_| {
+            Err(FileError::ReadDirError(
+                cwd_clone.clone(),
+                io::Error::new(io::ErrorKind::PermissionDenied, "denied"),
+            ))
+        });
+        assert!(matches!(
+            run_action(&cwd, &fs, &exec),
+            Err(CleanActionError::FileIo(_))
         ));
     }
 }
