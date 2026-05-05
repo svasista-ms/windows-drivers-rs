@@ -64,7 +64,7 @@ impl Fs {
                 let entry_path = entry.path();
                 let is_dir = entry
                     .file_type()
-                    .map_err(|e| FileError::ReadDirEntriesError(entry_path.clone(), e))?
+                    .map_err(|e| FileError::DirFileTypeError(entry_path.clone(), e))?
                     .is_dir();
                 Ok(DirEntryInfo {
                     path: entry_path,
