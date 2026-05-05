@@ -104,7 +104,7 @@ pub enum Subcmd {
     Build(BuildArgs),
     #[clap(
         name = "clean",
-        about = "Clean build artifacts of a Windows Driver Kit project"
+        about = "Clean build artifacts of the Windows Driver Kit project"
     )]
     Clean,
 }
