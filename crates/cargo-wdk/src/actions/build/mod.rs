@@ -158,7 +158,7 @@ impl<'a> BuildAction<'a> {
         for entry in &dirs {
             if entry.is_dir && self.fs.exists(&entry.path.join("Cargo.toml")) {
                 debug!(
-                    "Found atleast one valid Rust project directory: {}, continuing with the \
+                    "Found at least one valid Rust project directory: {}, continuing with the \
                      build flow",
                     entry
                         .path
