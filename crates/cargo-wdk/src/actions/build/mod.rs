@@ -189,17 +189,17 @@ impl<'a> BuildAction<'a> {
                 continue;
             }
 
-            let working_dir_path = entry.path;
-            let sub_dir = working_dir_path
+            let cargo_package_path = entry.path;
+            let package_dir_name = cargo_package_path
                 .file_name()
                 .expect("package sub directory name ended with \"..\" which is not expected")
                 .to_string_lossy();
 
-            debug!("Building package(s) in dir {sub_dir}");
-            if let Err(e) = self.run_from_workspace_root(&working_dir_path) {
+            debug!("Building package(s) in dir {package_dir_name}");
+            if let Err(e) = self.run_from_workspace_root(&cargo_package_path) {
                 failed_atleast_one_project = true;
                 err!(
-                    "Error building project: {sub_dir}, error: {:?}",
+                    "Error building project: {package_dir_name}, error: {:?}",
                     anyhow::Error::new(e)
                 );
             }

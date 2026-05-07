@@ -111,21 +111,23 @@ impl<'a> CleanAction<'a> {
                 continue;
             }
 
-            let working_dir_path = entry.path;
-            let sub_dir = working_dir_path
+            let cargo_package_path = entry.path;
+            let package_dir_name = cargo_package_path
                 .file_name()
                 .map(|s| s.to_string_lossy().into_owned())
                 .unwrap_or_default();
 
+            // Emit the log only once for the entire emulated workspace, the first
+            // time a valid Rust project is discovered during the scan.
             if !found_at_least_one_project {
                 info!("Cleaning package(s) in {}", self.working_dir.display());
             }
             found_at_least_one_project = true;
-            debug!("Cleaning package(s) in dir {sub_dir}");
-            if let Err(e) = self.run_cargo_clean(&working_dir_path) {
+            debug!("Cleaning package(s) in dir {package_dir_name}");
+            if let Err(e) = self.run_cargo_clean(&cargo_package_path) {
                 failed_at_least_one_project = true;
                 err!(
-                    "Error cleaning project: {sub_dir}, error: {:?}",
+                    "Error cleaning project: {package_dir_name}, error: {:?}",
                     anyhow::Error::new(e)
                 );
             }
