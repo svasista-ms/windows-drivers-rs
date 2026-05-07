@@ -51,29 +51,14 @@ impl Display for Profile {
 }
 
 /// Driver signing mode used during the package phase.
-///
-/// * `Off` - Skip all signing-related steps (certificate generation, signing,
-///   and signature verification).
-/// * `Test` - Use test-signing, which currently auto-generates a self-signed
-///   certificate (`WDRLocalTestCert` in the `WDRTestCertStore` store) and signs
-///   the driver binary and catalog file with it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, clap::ValueEnum)]
+#[value(rename_all = "lower")]
 pub enum SignMode {
+    /// Skip signing entirely.
     Off,
+    /// Use test-signing with an auto-generated self-signed certificate.
     #[default]
     Test,
-}
-
-impl FromStr for SignMode {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "off" => std::result::Result::Ok(Self::Off),
-            "test" => std::result::Result::Ok(Self::Test),
-            _ => Err(format!("'{s}' is not a valid sign mode")),
-        }
-    }
 }
 
 impl Display for SignMode {

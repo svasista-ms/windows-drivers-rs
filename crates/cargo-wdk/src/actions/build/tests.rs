@@ -266,10 +266,6 @@ pub fn given_a_driver_project_when_verify_signature_is_true_then_it_builds_succe
     );
 }
 
-// Given: A driver project
-// When: --sign-mode=off is provided
-// Then: It builds successfully and skips all certificate generation and
-// signing steps (no makecert / certmgr / signtool sign calls).
 #[test]
 pub fn given_a_driver_project_when_sign_mode_is_off_then_signing_and_verification_steps_are_skipped()
  {
@@ -307,11 +303,6 @@ pub fn given_a_driver_project_when_sign_mode_is_off_then_signing_and_verificatio
     );
 }
 
-// Given: A sample-class driver project
-// When: --sign-mode=off is provided alongside --sample
-// Then: It builds successfully, signing is skipped, and infverif still runs
-// with the /msft sample-class flag (i.e., sample-class processing is
-// independent of signing).
 #[test]
 pub fn given_a_sample_class_driver_project_when_sign_mode_is_off_then_signing_is_skipped_and_sample_infverif_still_runs()
  {
@@ -350,11 +341,6 @@ pub fn given_a_sample_class_driver_project_when_sign_mode_is_off_then_signing_is
     );
 }
 
-// Given: A driver project
-// When: --sign-mode=off and --verify-signature=true are both provided
-// Then: Defensive guard in PackageTask::run() takes effect — signtool verify
-// is skipped (the CLI normally rejects this combo, but the package task
-// itself must not invoke verification when there is nothing signed).
 #[test]
 pub fn given_a_driver_project_when_sign_mode_is_off_and_verify_signature_is_true_then_verification_is_skipped()
  {

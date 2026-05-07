@@ -258,15 +258,15 @@ impl<'a> PackageTask<'a> {
                 )?;
             }
             SignMode::Off => {
-                info!("Sign mode is 'Off'; skipping certificate generation and signing");
+                info!("Sign mode is 'off'; skipping certificate generation and signing");
             }
         }
         self.run_infverif()?;
         // Verify signatures only when --verify-signature flag = true is passed
-        // and signing was done (sign mode is not 'Off').
+        // and signing was done (sign mode is not 'off').
         if self.verify_signature {
             if matches!(self.sign_mode, SignMode::Off) {
-                warn!("Skipping signature verification because sign mode is 'Off'");
+                warn!("Skipping signature verification because sign mode is 'off'");
             } else {
                 info!("Verifying signatures for driver binary and cat file using signtool");
                 self.run_signtool_verify(&self.dest_driver_binary_path)?;

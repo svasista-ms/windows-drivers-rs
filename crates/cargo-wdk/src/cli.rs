@@ -86,16 +86,13 @@ pub struct BuildArgs {
     #[arg(long, ignore_case = true)]
     pub target_arch: Option<CpuArchitecture>,
 
+    /// Driver signing mode.
+    #[arg(long, value_enum, ignore_case = true, default_value_t = SignMode::Test)]
+    pub sign_mode: SignMode,
+
     /// Verify the signature
     #[arg(long)]
     pub verify_signature: bool,
-
-    /// Driver signing mode. Use `Test` (default) to sign with an
-    /// auto-generated self-signed certificate, or `Off` to skip signing
-    /// entirely.
-    #[arg(long, ignore_case = true, default_value_t = SignMode::Test)]
-    pub sign_mode: SignMode,
-
     /// Build sample class driver project
     #[arg(long)]
     pub sample: bool,
