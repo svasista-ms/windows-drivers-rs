@@ -568,7 +568,7 @@ impl<'a> PackageTask<'a> {
         let certificates = parse_certificates(&stdout, WDR_LOCAL_TEST_CERT);
         for certificate in &certificates {
             trace!(
-                thumbprint = certificate.thumbprint,
+                thumbprint = %certificate.thumbprint,
                 remaining_validity_days = certificate.remaining_validity_days(today),
                 "Found test certificate in store"
             );
