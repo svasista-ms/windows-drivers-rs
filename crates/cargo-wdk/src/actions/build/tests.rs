@@ -2655,10 +2655,11 @@ impl TestBuildAction {
         self
     }
 
-    /// Mocks the `certmgr -v -s <store>` lookups. The outputs are returned in
-    /// order and then repeated, so a `[not found, not found, found]` sequence
-    /// covers one create-then-select cycle per driver.
     fn expect_certmgr_cert_lookup(mut self, outputs: Vec<Output>) -> Self {
+        assert!(
+            !outputs.is_empty(),
+            "expect_certmgr_cert_lookup requires at least one output"
+        );
         let expected_certmgr_command: &'static str = "certmgr.exe";
         let expected_certmgr_args: Vec<String> = vec![
             "-v".to_string(),
