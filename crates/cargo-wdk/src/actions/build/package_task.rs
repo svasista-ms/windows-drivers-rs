@@ -326,9 +326,9 @@ impl<'a> PackageTask<'a> {
             let thumbprint = self.generate_certificate()?;
             self.copy(&self.src_cert_file_path, &self.dest_cert_file_path)?;
             // Default WDR test-cert switches. The signature is deliberately not
-            // timestamped: the certificate is generated locally for test signing
-            // only, and requiring a timestamp server would make every build
-            // depend on network access.
+            // timestamped: the certificate is generated locally for test
+            // signing only, and requiring a timestamp server would
+            // make every build depend on network access.
             [
                 "/v",
                 "/s",
