@@ -164,6 +164,18 @@ pub struct BuildArgs {
     )]
     pub inf2cat_args: Option<PassthroughArgs>,
 
+    /// Custom arguments to pass to `stampinf` when generating the INF file,
+    /// e.g. `--stampinf-args '-d 01/01/2026 -v 1.2.3.4 -p "Contoso Ltd"'`.
+    #[arg(
+        long,
+        value_name = "ARGS",
+        // `stampinf` switches are `-` prefixed.
+        allow_hyphen_values = true,
+        value_parser = parse_passthrough_args,
+        help_heading = "Stampinf Options"
+    )]
+    pub stampinf_args: Option<PassthroughArgs>,
+
     /// Assert that `Cargo.lock` will remain unchanged
     #[arg(long)]
     pub locked: bool,
@@ -222,6 +234,37 @@ impl BuildArgs {
                     format!(
                         "`--inf2cat-args` must not contain `{arg}`; cargo-wdk supplies the \
                          `/driver:` switch itself"
+                    ),
+                ));
+            }
+        }
+        Ok(Some(args))
+    }
+
+    /// Resolves the arguments to forward to `stampinf`. Rejects
+    /// the switches cargo-wdk derives from the build itself: `-f`, `-a`, `-c`,
+    /// `-k` and `-u`.
+    /// Returns a `clap::Error` if the caller-supplied arguments are invalid.
+    fn stampinf_args(&self) -> Result<Option<Vec<String>>, clap::Error> {
+        const STAMPINF_RESERVED_SWITCHES: [&str; 5] = ["f", "a", "c", "k", "u"];
+        let Some(args) = self.stampinf_args.clone().map(|parsed| parsed.0) else {
+            return Ok(None);
+        };
+        for arg in &args {
+            // `stampinf` accepts both `-x` and `/x`, case-insensitively.
+            let Some(switch) = arg.strip_prefix(['-', '/']) else {
+                continue;
+            };
+            if STAMPINF_RESERVED_SWITCHES
+                .iter()
+                .any(|reserved| switch.eq_ignore_ascii_case(reserved))
+            {
+                return Err(Cli::command().error(
+                    ErrorKind::ArgumentConflict,
+                    format!(
+                        "`--stampinf-args` must not contain `{arg}`; cargo-wdk supplies the `-{}` \
+                         switches itself",
+                        STAMPINF_RESERVED_SWITCHES.join("`, `-")
                     ),
                 ));
             }
@@ -355,6 +398,7 @@ impl Cli {
             Subcmd::Build(cli_args) => {
                 let sign_mode = cli_args.sign_mode()?;
                 let inf2cat_args = cli_args.inf2cat_args()?;
+                let stampinf_args = cli_args.stampinf_args()?;
                 BuildAction::new(
                     &BuildActionParams {
                         working_dir: Path::new("."), // Using current dir as working dir
@@ -362,6 +406,7 @@ impl Cli {
                         target_arch: cli_args.target_arch,
                         sign_mode,
                         inf2cat_args,
+                        stampinf_args,
                         is_sample_class: cli_args.sample,
                         locked: cli_args.locked,
                         target_platform: cli_args.target_platform.into(),
@@ -554,6 +599,51 @@ mod tests {
             assert_eq!(
                 args.inf2cat_args().expect("should resolve"),
                 Some(vec!["/os:10_x64".to_string(), "/uselocaltime".to_string()])
+            );
+        }
+
+        #[test]
+        fn stampinf_args_rejects_switches_reserved_by_cargo_wdk() {
+            for value in [
+                "-f other.inf",
+                "-a arm64",
+                "-c other.cat",
+                "-k 1.15",
+                "-u 2.33.0",
+                "/c other.cat",
+                "-C other.cat",
+                "-d 01/01/2026 -A arm64",
+            ] {
+                let args =
+                    parse_build_args(&["--stampinf-args", value]).expect("args should parse");
+                let err = args
+                    .stampinf_args()
+                    .expect_err("reserved switch should be rejected");
+                assert!(
+                    err.to_string()
+                        .contains("cargo-wdk supplies the `-f`, `-a`, `-c`, `-k`, `-u` switches"),
+                    "unexpected error for {value:?}: {err}"
+                );
+            }
+        }
+
+        #[test]
+        fn stampinf_args_allows_other_switches() {
+            let args = parse_build_args(&[
+                "--stampinf-args",
+                "-d 01/01/2026 -v 1.2.3.4 -p \"Contoso Ltd\"",
+            ])
+            .expect("args should parse");
+            assert_eq!(
+                args.stampinf_args().expect("should resolve"),
+                Some(vec![
+                    "-d".to_string(),
+                    "01/01/2026".to_string(),
+                    "-v".to_string(),
+                    "1.2.3.4".to_string(),
+                    "-p".to_string(),
+                    "Contoso Ltd".to_string(),
+                ])
             );
         }
     }

@@ -85,6 +85,7 @@ pub struct PackageTaskParams<'a> {
     pub target_arch: &'a CpuArchitecture,
     pub sign_mode: SignMode,
     pub inf2cat_args: Option<Vec<String>>,
+    pub stampinf_args: Option<Vec<String>>,
     pub sample_class: bool,
     pub driver_model: DriverConfig,
     pub target_platform: TargetPlatform,
@@ -95,6 +96,7 @@ pub struct PackageTask<'a> {
     package_name: String,
     sign_mode: SignMode,
     inf2cat_args: Option<Vec<String>>,
+    stampinf_args: Option<Vec<String>>,
     sample_class: bool,
 
     // src paths
@@ -207,6 +209,7 @@ impl<'a> PackageTask<'a> {
             package_name,
             sign_mode: params.sign_mode,
             inf2cat_args: params.inf2cat_args,
+            stampinf_args: params.stampinf_args,
             sample_class: params.sample_class,
             src_inx_file_path,
             src_driver_binary_file_path,
@@ -359,6 +362,9 @@ impl<'a> PackageTask<'a> {
     }
 
     fn run_stampinf(&self) -> Result<(), PackageTaskError> {
+        const STAMPINF_DATE_SWITCH: &str = "d";
+        const STAMPINF_VERSION_SWITCH: &str = "v";
+
         info!("Running stampinf");
         let wdf_version_flags = match self.driver_model {
             DriverConfig::Kmdf(kmdf_config) => {
@@ -384,40 +390,49 @@ impl<'a> PackageTask<'a> {
         let cat_file_path = format!("{}.cat", self.package_name);
         let dest_inf_file_path = self.dest_inf_file_path.to_string_lossy();
         let arch = self.arch.to_string();
-        let mut args: Vec<&str> = vec![
-            "-f",
-            &dest_inf_file_path,
-            "-d",
-            "*",
-            "-a",
-            &arch,
-            "-c",
-            &cat_file_path,
-        ];
+        let mut args: Vec<&str> = vec!["-f", &dest_inf_file_path];
 
-        match std::env::var(STAMPINF_VERSION_ENV_VAR) {
-            Ok(version) if !version.trim().is_empty() => {
-                // When STAMPINF_VERSION is set to a non-empty, non-whitespace
-                // value, we intentionally omit -v so stampinf
-                // reads it and populates DriverVer.
-                // (Whitespace-only values are ignored.)
-                debug!(
-                    DriverVer = version,
-                    "Using {STAMPINF_VERSION_ENV_VAR} env var to set DriverVer"
-                );
-            }
-            _ => {
-                args.extend(["-v", "*"]);
+        if !self.stampinf_args_contains(STAMPINF_DATE_SWITCH) {
+            args.extend(["-d", "*"]);
+        }
+        args.extend(["-a", &arch, "-c", &cat_file_path]);
+        if self.stampinf_args_contains(STAMPINF_VERSION_SWITCH) {
+            debug!("Using -v from --stampinf-args to set DriverVer");
+        } else {
+            match std::env::var(STAMPINF_VERSION_ENV_VAR) {
+                Ok(version) if !version.trim().is_empty() => {
+                    // When STAMPINF_VERSION is set to a non-empty,
+                    // non-whitespace value, we intentionally omit -v so
+                    // stampinf reads it and populates DriverVer.
+                    // (Whitespace-only values are ignored.)
+                    debug!(
+                        DriverVer = version,
+                        "Using {STAMPINF_VERSION_ENV_VAR} env var to set DriverVer"
+                    );
+                }
+                _ => {
+                    args.extend(["-v", "*"]);
+                }
             }
         }
 
         if !wdf_version_flags.is_empty() {
             args.append(&mut wdf_version_flags.iter().map(String::as_str).collect());
         }
+        if let Some(stampinf_args) = &self.stampinf_args {
+            args.extend(stampinf_args.iter().map(String::as_str));
+        }
         if let Err(e) = self.command_exec.run("stampinf", &args, None, None) {
             return Err(PackageTaskError::StampinfCommand(e));
         }
         Ok(())
+    }
+
+    fn stampinf_args_contains(&self, switch: &str) -> bool {
+        self.stampinf_args.iter().flatten().any(|arg| {
+            arg.strip_prefix(['-', '/'])
+                .is_some_and(|arg| arg.eq_ignore_ascii_case(switch))
+        })
     }
 
     fn run_inf2cat(&self) -> Result<(), PackageTaskError> {
@@ -737,6 +752,7 @@ mod tests {
                 signtool_args: Vec::new(),
             },
             inf2cat_args: None,
+            stampinf_args: None,
             target_platform: TargetPlatform::Universal,
         };
         let dest_root = target_dir.join(format!("{package_name}_package"));
@@ -811,6 +827,7 @@ mod tests {
                 signtool_args: Vec::new(),
             },
             inf2cat_args: None,
+            stampinf_args: None,
             target_platform: TargetPlatform::Universal,
         };
 
@@ -842,6 +859,7 @@ mod tests {
                 signtool_args: Vec::new(),
             },
             inf2cat_args: None,
+            stampinf_args: None,
             target_platform: TargetPlatform::Universal,
         };
 
@@ -882,6 +900,7 @@ mod tests {
                             signtool_args: Vec::new(),
                         },
                         inf2cat_args: None,
+                        stampinf_args: None,
                         target_platform: TargetPlatform::Universal,
                     };
 
@@ -922,6 +941,128 @@ mod tests {
         }
     }
 
+    fn stampinf_args_works_with_defaults(
+        env_version: Option<&str>,
+        stampinf_args: &[&str],
+        expected: &[&str],
+    ) {
+        let working_dir = PathBuf::from("C:/abs/driver");
+        let target_dir = PathBuf::from("C:/abs/driver/target/debug");
+        let arch = CpuArchitecture::Amd64;
+
+        let params = PackageTaskParams {
+            package_name: "driver",
+            working_dir: &working_dir,
+            target_dir: &target_dir,
+            target_arch: &arch,
+            driver_model: DriverConfig::Kmdf(KmdfConfig::default()),
+            sample_class: false,
+            sign_mode: SignMode::Off,
+            inf2cat_args: None,
+            stampinf_args: Some(stampinf_args.iter().map(ToString::to_string).collect()),
+            target_platform: TargetPlatform::Universal,
+        };
+
+        let wdk_build = WdkBuild::default();
+        let fs = Fs::default();
+        let mut command_exec = CommandExec::default();
+        let expected: Vec<String> = expected.iter().map(ToString::to_string).collect();
+        command_exec
+            .expect_run()
+            .withf(move |cmd: &str, args: &[&str], _, _| {
+                // Skip the `-f <inf path>` prefix, whose path is environment
+                // specific.
+                cmd == "stampinf" && args[2..] == expected[..]
+            })
+            .once()
+            .return_once(|_, _, _, _| {
+                Ok(Output {
+                    status: ExitStatus::default(),
+                    stdout: vec![],
+                    stderr: vec![],
+                })
+            });
+
+        let result =
+            crate::test_utils::with_env(&[(STAMPINF_VERSION_ENV_VAR, env_version)], || {
+                let task = PackageTask::new(params, &wdk_build, &command_exec, &fs);
+                task.run_stampinf()
+            });
+        assert!(result.is_ok());
+    }
+
+    /// The `-k` value cargo-wdk derives from the default KMDF metadata.
+    fn default_kmdf_version() -> String {
+        let kmdf = KmdfConfig::default();
+        format!(
+            "{}.{}",
+            kmdf.kmdf_version_major, kmdf.target_kmdf_version_minor
+        )
+    }
+
+    #[test]
+    fn run_stampinf_appends_custom_args_after_the_defaults() {
+        stampinf_args_works_with_defaults(
+            None,
+            &["-p", "Contoso Ltd", "-n"],
+            &[
+                "-d",
+                "*",
+                "-a",
+                "amd64",
+                "-c",
+                "driver.cat",
+                "-v",
+                "*",
+                "-k",
+                &default_kmdf_version(),
+                "-p",
+                "Contoso Ltd",
+                "-n",
+            ],
+        );
+    }
+
+    #[test]
+    fn run_stampinf_drops_default_date_and_version_when_caller_supplies_them() {
+        stampinf_args_works_with_defaults(
+            None,
+            &["-d", "01/01/2026", "/V", "1.2.3.4"],
+            &[
+                "-a",
+                "amd64",
+                "-c",
+                "driver.cat",
+                "-k",
+                &default_kmdf_version(),
+                "-d",
+                "01/01/2026",
+                "/V",
+                "1.2.3.4",
+            ],
+        );
+    }
+
+    #[test]
+    fn run_stampinf_caller_version_wins_over_env_var() {
+        stampinf_args_works_with_defaults(
+            Some("9.9.9.9"),
+            &["-v", "1.2.3.4"],
+            &[
+                "-d",
+                "*",
+                "-a",
+                "amd64",
+                "-c",
+                "driver.cat",
+                "-k",
+                &default_kmdf_version(),
+                "-v",
+                "1.2.3.4",
+            ],
+        );
+    }
+
     #[test]
     fn run_inf2cat_with_no_args_uses_arch_os_and_uselocaltime() {
         let working_dir = PathBuf::from("C:/abs/driver");
@@ -940,6 +1081,7 @@ mod tests {
                 signtool_args: Vec::new(),
             },
             inf2cat_args: None,
+            stampinf_args: None,
             target_platform: TargetPlatform::Universal,
         };
 
@@ -985,6 +1127,7 @@ mod tests {
                 signtool_args: Vec::new(),
             },
             inf2cat_args: Some(Vec::new()),
+            stampinf_args: None,
             target_platform: TargetPlatform::Universal,
         };
 
@@ -1030,6 +1173,7 @@ mod tests {
                 "/os:10_x64,10_CO_X64".to_string(),
                 "/verbose".to_string(),
             ]),
+            stampinf_args: None,
             target_platform: TargetPlatform::Universal,
         };
 
@@ -1088,6 +1232,7 @@ mod tests {
                 sample_class: false,
                 sign_mode: SignMode::Off,
                 inf2cat_args: None,
+                stampinf_args: None,
                 target_platform: TargetPlatform::Universal,
             };
             PackageTask::new(params, wdk_build, command_exec, fs)
@@ -1285,6 +1430,7 @@ mod tests {
                     ],
                 },
                 inf2cat_args: None,
+                stampinf_args: None,
                 target_platform: TargetPlatform::Universal,
             };
             let task = PackageTask::new(params, &wdk_build, &command_exec, &fs);
@@ -1312,6 +1458,7 @@ mod tests {
             sample_class: false,
             sign_mode: SignMode::Off,
             inf2cat_args: None,
+            stampinf_args: None,
             target_platform,
         };
 

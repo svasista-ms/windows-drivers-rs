@@ -84,6 +84,9 @@ Driver Signing:
 Inf2Cat Options:
       --inf2cat-args <ARGS>        Custom arguments to pass to `inf2cat` when generating the catalog file, e.g. `--inf2cat-args '/os:10_x64,10_GE_X64 /uselocaltime'`
 
+Stampinf Options:
+      --stampinf-args <ARGS>  Custom arguments to pass to `stampinf` when generating the INF file, e.g. `--stampinf-args '-d 01/01/2026 -v 1.2.3.4 -p "Contoso Ltd"'`
+
 Feature Selection:
       --all-features         Activate all available features
       --no-default-features  Do not activate the `default` feature

@@ -745,6 +745,62 @@ fn kmdf_driver_with_custom_inf2cat_args_builds_successfully() {
     );
 }
 
+/// Functional tests for the `--stampinf-args` passthrough.
+mod stampinf_args {
+    use super::*;
+
+    #[test]
+    fn kmdf_driver_with_custom_date_and_version_builds_successfully() {
+        let driver = "kmdf-driver";
+        clean_build_and_verify_project(
+            "kmdf",
+            driver,
+            None,
+            Some("4.3.2.1"),
+            None,
+            None,
+            None,
+            None,
+            Some(&["--stampinf-args", "-d 01/01/2026 -v 4.3.2.1"]),
+        );
+    }
+
+    #[test]
+    fn custom_version_wins_over_stampinf_version_env_var() {
+        let driver = "kmdf-driver";
+        let env = [(STAMPINF_VERSION_ENV_VAR, Some("9.9.9.9".to_string()))];
+        clean_build_and_verify_project(
+            "kmdf",
+            driver,
+            None,
+            Some("4.3.2.1"),
+            None,
+            None,
+            Some(&env),
+            None,
+            Some(&["--stampinf-args", "-v 4.3.2.1"]),
+        );
+    }
+
+    #[test]
+    fn switches_owned_by_cargo_wdk_are_rejected() {
+        let driver = "kmdf-driver";
+        let project_path = format!("tests/{driver}");
+        let mut cmd = create_cargo_wdk_cmd(
+            "build",
+            Some(&["--stampinf-args", "-c other.cat"]),
+            None,
+            Some(&project_path),
+        );
+        let assertion = cmd.assert().failure();
+        let stderr = String::from_utf8_lossy(&assertion.get_output().stderr).to_string();
+        assert!(
+            stderr.contains("`--stampinf-args` must not contain `-c`"),
+            "expected validation error naming the reserved switch, got: {stderr}"
+        );
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn clean_build_and_verify_project(
     driver_type: &str,
