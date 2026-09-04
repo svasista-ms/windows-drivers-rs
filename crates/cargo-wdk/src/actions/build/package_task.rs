@@ -362,8 +362,8 @@ impl<'a> PackageTask<'a> {
     }
 
     fn run_stampinf(&self) -> Result<(), PackageTaskError> {
-        const STAMPINF_DATE_SWITCH: &str = "d";
-        const STAMPINF_VERSION_SWITCH: &str = "v";
+        const STAMPINF_DATE_ARG: &str = "d";
+        const STAMPINF_VERSION_ARG: &str = "v";
 
         info!("Running stampinf");
         let wdf_version_flags = match self.driver_model {
@@ -392,11 +392,11 @@ impl<'a> PackageTask<'a> {
         let arch = self.arch.to_string();
         let mut args: Vec<&str> = vec!["-f", &dest_inf_file_path];
 
-        if !self.stampinf_args_contains(STAMPINF_DATE_SWITCH) {
+        if !self.stampinf_args_contains(STAMPINF_DATE_ARG) {
             args.extend(["-d", "*"]);
         }
         args.extend(["-a", &arch, "-c", &cat_file_path]);
-        if self.stampinf_args_contains(STAMPINF_VERSION_SWITCH) {
+        if self.stampinf_args_contains(STAMPINF_VERSION_ARG) {
             debug!("Using -v from --stampinf-args to set DriverVer");
         } else {
             match std::env::var(STAMPINF_VERSION_ENV_VAR) {
@@ -428,10 +428,10 @@ impl<'a> PackageTask<'a> {
         Ok(())
     }
 
-    fn stampinf_args_contains(&self, switch: &str) -> bool {
+    fn stampinf_args_contains(&self, arg_name: &str) -> bool {
         self.stampinf_args.iter().flatten().any(|arg| {
             arg.strip_prefix(['-', '/'])
-                .is_some_and(|arg| arg.eq_ignore_ascii_case(switch))
+                .is_some_and(|arg| arg.eq_ignore_ascii_case(arg_name))
         })
     }
 

@@ -781,24 +781,6 @@ mod stampinf_args {
             Some(&["--stampinf-args", "-v 4.3.2.1"]),
         );
     }
-
-    #[test]
-    fn switches_owned_by_cargo_wdk_are_rejected() {
-        let driver = "kmdf-driver";
-        let project_path = format!("tests/{driver}");
-        let mut cmd = create_cargo_wdk_cmd(
-            "build",
-            Some(&["--stampinf-args", "-c other.cat"]),
-            None,
-            Some(&project_path),
-        );
-        let assertion = cmd.assert().failure();
-        let stderr = String::from_utf8_lossy(&assertion.get_output().stderr).to_string();
-        assert!(
-            stderr.contains("`--stampinf-args` must not contain `-c`"),
-            "expected validation error naming the reserved switch, got: {stderr}"
-        );
-    }
 }
 
 #[allow(clippy::too_many_arguments)]
