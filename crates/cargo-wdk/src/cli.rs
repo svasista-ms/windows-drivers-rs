@@ -169,7 +169,7 @@ pub struct BuildArgs {
     #[arg(
         long,
         value_name = "ARGS",
-        // `stampinf` args are `-` prefixed.
+        // `stampinf` args can be `-` prefixed.
         allow_hyphen_values = true,
         value_parser = parse_passthrough_args,
         help_heading = "Stampinf Options"
@@ -628,7 +628,7 @@ mod tests {
         }
 
         #[test]
-        fn stampinf_args_allows_other_args() {
+        fn stampinf_args_allows_args_not_reserved_by_cargo_wdk() {
             let args = parse_build_args(&[
                 "--stampinf-args",
                 "-d 01/01/2026 -v 1.2.3.4 -p \"Contoso Ltd\"",
