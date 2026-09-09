@@ -259,14 +259,17 @@ impl BuildArgs {
                 .iter()
                 .any(|reserved| arg_name.eq_ignore_ascii_case(reserved))
             {
-              let reserved_args = STAMPINF_RESERVED_ARGS
+                let reserved_args = STAMPINF_RESERVED_ARGS
                     .iter()
                     .map(|arg| format!("`-{arg}`"))
                     .collect::<Vec<_>>()
                     .join(", ");
-             return Err(Cli::command().error(
-                     ErrorKind::ArgumentConflict,
-                    format!("`--stampinf-args` must not contain `{arg}`; cargo-wdk supplies the {reserved_args} args itself")));
+                return Err(Cli::command().error(
+                    ErrorKind::ArgumentConflict,
+                    format!(
+                        "`--stampinf-args` must not contain `{arg}`; cargo-wdk supplies the \
+                         {reserved_args} args itself"
+                    ),
                 ));
             }
         }
