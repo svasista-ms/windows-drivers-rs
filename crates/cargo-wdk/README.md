@@ -113,14 +113,7 @@ If you have a workspace with a mix of sample and non-sample driver projects, the
 
 #### Customizing `stampinf` arguments
 
-To stamp a fixed `DriverVer`, `Provider`, or customize the generated INF file, pass `--stampinf-args` with a string of the arguments to forward to `stampinf`.
-
-**Note:**
-
-- `cargo-wdk` derives `-f`, `-a`, `-c`, `-k` and `-u` from the build, so passing any of them is an error.
-- `cargo-wdk` passes `-d *` and `-v *` by default. You can supply your own `-d <mm/dd/yyyy>` or `-v <w.x.y.z>` to override them.
-- If `-v <version>` is present it sets the `DriverVer` version to the value passed, else the `STAMPINF_VERSION` environment variable is used. If neither is available, `cargo-wdk` uses the default, `-v *`.
-
+To customize the behaviour of `stampinf`, pass `--stampinf-args` with arguments to forward to `stampinf`. Args `-f`, `-a`, `-c`, `-k` and `-u` are not allowed because they are always supplied by `cargo-wdk` itself. 
 #### Customizing `inf2cat` arguments
 
 To target a specific set of Windows versions or to customize the behaviour of `inf2cat` in any other way, pass `--inf2cat-args` with a string of the arguments to forward to `inf2cat`. `cargo-wdk` itself provides the `/driver` argument so do not include it or its alias `/drv`.
