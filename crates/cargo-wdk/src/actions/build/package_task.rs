@@ -416,9 +416,7 @@ impl<'a> PackageTask<'a> {
             }
         }
 
-        if !wdf_version_flags.is_empty() {
-            args.append(&mut wdf_version_flags.iter().map(String::as_str).collect());
-        }
+        args.extend(wdf_version_flags.iter().map(String::as_str));
         if let Some(stampinf_args) = &self.stampinf_args {
             args.extend(stampinf_args.iter().map(String::as_str));
         }
@@ -1004,7 +1002,7 @@ mod tests {
     fn run_stampinf_appends_custom_args_after_the_defaults() {
         stampinf_args_works_with_defaults(
             None,
-            &["-p", "Contoso Ltd", "-n"],
+            &["/p", "Contoso Ltd", "-n"],
             &[
                 "-d",
                 "*",
@@ -1016,7 +1014,7 @@ mod tests {
                 "*",
                 "-k",
                 &default_kmdf_version(),
-                "-p",
+                "/p",
                 "Contoso Ltd",
                 "-n",
             ],
@@ -1047,7 +1045,7 @@ mod tests {
     fn run_stampinf_caller_version_wins_over_env_var() {
         stampinf_args_works_with_defaults(
             Some("9.9.9.9"),
-            &["-v", "1.2.3.4"],
+            &["/v", "1.2.3.4"],
             &[
                 "-d",
                 "*",
@@ -1057,7 +1055,7 @@ mod tests {
                 "driver.cat",
                 "-k",
                 &default_kmdf_version(),
-                "-v",
+                "/v",
                 "1.2.3.4",
             ],
         );

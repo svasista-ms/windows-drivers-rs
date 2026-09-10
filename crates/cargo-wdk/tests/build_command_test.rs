@@ -761,7 +761,7 @@ mod stampinf_args {
             None,
             None,
             None,
-            Some(&["--stampinf-args", "-d 01/01/2026 -v 4.3.2.1"]),
+            Some(&["--stampinf-args", "-d 01/01/2026 /v 4.3.2.1"]),
         );
     }
 
@@ -778,7 +778,7 @@ mod stampinf_args {
             None,
             Some(&env),
             None,
-            Some(&["--stampinf-args", "-v 4.3.2.1"]),
+            Some(&["--stampinf-args", "/v 4.3.2.1"]),
         );
     }
 }

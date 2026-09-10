@@ -616,7 +616,7 @@ mod tests {
                 "-u 2.33.0",
                 "/c other.cat",
                 "-C other.cat",
-                "-d 01/01/2026 -A arm64",
+                "-d 01/01/2026 /A arm64",
             ] {
                 let args =
                     parse_build_args(&["--stampinf-args", value]).expect("args should parse");
@@ -635,7 +635,7 @@ mod tests {
         fn stampinf_args_allows_args_not_reserved_by_cargo_wdk() {
             let args = parse_build_args(&[
                 "--stampinf-args",
-                "-d 01/01/2026 -v 1.2.3.4 -p \"Contoso Ltd\"",
+                "-d 01/01/2026 /v 1.2.3.4 -p \"Contoso Ltd\"",
             ])
             .expect("args should parse");
             assert_eq!(
@@ -643,7 +643,7 @@ mod tests {
                 Some(vec![
                     "-d".to_string(),
                     "01/01/2026".to_string(),
-                    "-v".to_string(),
+                    "/v".to_string(),
                     "1.2.3.4".to_string(),
                     "-p".to_string(),
                     "Contoso Ltd".to_string(),
