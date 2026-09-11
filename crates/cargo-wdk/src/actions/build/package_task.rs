@@ -556,17 +556,19 @@ impl<'a> PackageTask<'a> {
 
         let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
 
-        // Determine the indices of password values (the token right after each
-        // `/p`) so they can be redacted by `run_with_redaction` in the logs.
-        // `value_index < file_operand_index` ensures a value token
-        // actually follows `/p` and that it is never the trailing file operand.
+        // Determine the indices of password values so they can be redacted by
+        // `run_with_redaction` in the logs.
+        // `value_index < file_operand_index` ensures a value token actually
+        // follows `-p` or `/p` and that it is never the trailing file operand.
         let file_operand_index = arg_refs.len() - 1;
         let redaction_indices: Vec<usize> = arg_refs
             .iter()
             .enumerate()
             .filter_map(|(i, arg)| {
                 let value_index = i + 1;
-                (arg.eq_ignore_ascii_case("/p") && value_index < file_operand_index)
+                (arg.strip_prefix(['-', '/'])
+                    .is_some_and(|arg| arg.eq_ignore_ascii_case("p"))
+                    && value_index < file_operand_index)
                     .then_some(value_index)
             })
             .collect();
@@ -1183,7 +1185,7 @@ mod tests {
                     "sign",
                     "/f",
                     "cert.pfx",
-                    "/P",
+                    "-P",
                     "secret",
                     "/fd",
                     "SHA256",
@@ -1201,7 +1203,7 @@ mod tests {
             let signtool_args = [
                 "/f".to_string(),
                 "cert.pfx".to_string(),
-                "/P".to_string(),
+                "-P".to_string(),
                 "secret".to_string(),
                 "/fd".to_string(),
                 "SHA256".to_string(),
