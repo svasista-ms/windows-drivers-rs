@@ -1841,7 +1841,7 @@ impl TestBuildAction {
             sample_class,
             sign_mode: SignMode::Test {
                 verify_signature: false,
-                signtool_args: Vec::new(),
+                signtool_args: None,
             },
             locked: false,
             features: Features::default(),

@@ -143,6 +143,8 @@ pub struct BuildArgs {
     #[arg(
         long,
         value_name = "ARGS",
+        // `signtool` args can be `-` prefixed.
+        allow_hyphen_values = true,
         value_parser = parse_passthrough_args,
         help_heading = "Driver Signing"
     )]
@@ -198,11 +200,7 @@ impl BuildArgs {
             }
             SignModeArg::Test => Ok(SignMode::Test {
                 verify_signature: self.verify_signature,
-                signtool_args: self
-                    .signtool_args
-                    .clone()
-                    .map(|parsed| parsed.0)
-                    .unwrap_or_default(),
+                signtool_args: self.signtool_args.clone().map(|parsed| parsed.0),
             }),
         }
     }
@@ -514,7 +512,7 @@ mod tests {
                 args.sign_mode().expect("mapping should succeed"),
                 SignMode::Test {
                     verify_signature: false,
-                    signtool_args: Vec::new(),
+                    signtool_args: None,
                 }
             );
         }
@@ -527,7 +525,7 @@ mod tests {
                 args.sign_mode().expect("mapping should succeed"),
                 SignMode::Test {
                     verify_signature: true,
-                    signtool_args: vec!["/fd".to_string(), "SHA256".to_string()],
+                    signtool_args: Some(vec!["/fd".to_string(), "SHA256".to_string()]),
                 }
             );
         }

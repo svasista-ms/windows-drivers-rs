@@ -54,7 +54,7 @@ pub enum SignMode {
         /// certificate and default switches. When non-empty, auto generation
         /// is skipped and the caller owns the full signtool command line
         /// (certificate selection, digest, etc.).
-        signtool_args: Vec<String>,
+        signtool_args: Option<Vec<String>>,
     },
 }
 
@@ -288,25 +288,26 @@ impl<'a> PackageTask<'a> {
             info!("Sign mode is 'off'; skipping signing");
             return Ok(());
         };
-        let sign_args = if signtool_args.is_empty() {
-            self.generate_certificate()?;
-            self.copy(&self.src_cert_file_path, &self.dest_cert_file_path)?;
-            // Default WDR test-cert switches.
-            [
-                "/v",
-                "/s",
-                WDR_TEST_CERT_STORE,
-                "/n",
-                WDR_LOCAL_TEST_CERT,
-                "/t",
-                DEFAULT_TIMESTAMP_URL,
-                "/fd",
-                "SHA256",
-            ]
-            .map(ToString::to_string)
-            .to_vec()
-        } else {
-            signtool_args.clone()
+        let sign_args = match signtool_args {
+            Some(args) if !args.is_empty() => args.clone(),
+            _ => {
+                self.generate_certificate()?;
+                self.copy(&self.src_cert_file_path, &self.dest_cert_file_path)?;
+                // Default WDR test-cert switches.
+                [
+                    "/v",
+                    "/s",
+                    WDR_TEST_CERT_STORE,
+                    "/n",
+                    WDR_LOCAL_TEST_CERT,
+                    "/t",
+                    DEFAULT_TIMESTAMP_URL,
+                    "/fd",
+                    "SHA256",
+                ]
+                .map(ToString::to_string)
+                .to_vec()
+            }
         };
         self.run_signtool_sign(&self.dest_driver_binary_path, &sign_args)?;
         self.run_signtool_sign(&self.dest_cat_file_path, &sign_args)?;
@@ -724,7 +725,7 @@ mod tests {
             sample_class: false,
             sign_mode: SignMode::Test {
                 verify_signature: false,
-                signtool_args: Vec::new(),
+                signtool_args: None,
             },
             inf2cat_args: None,
             target_platform: TargetPlatform::Universal,
@@ -740,7 +741,7 @@ mod tests {
             task.sign_mode,
             SignMode::Test {
                 verify_signature: false,
-                signtool_args: Vec::new(),
+                signtool_args: None,
             }
         );
         assert!(!task.sample_class);
@@ -793,7 +794,7 @@ mod tests {
             sample_class: false,
             sign_mode: SignMode::Test {
                 verify_signature: false,
-                signtool_args: Vec::new(),
+                signtool_args: None,
             },
             inf2cat_args: None,
             target_platform: TargetPlatform::Universal,
@@ -824,7 +825,7 @@ mod tests {
             sample_class: false,
             sign_mode: SignMode::Test {
                 verify_signature: false,
-                signtool_args: Vec::new(),
+                signtool_args: None,
             },
             inf2cat_args: None,
             target_platform: TargetPlatform::Universal,
@@ -864,7 +865,7 @@ mod tests {
                         sample_class: false,
                         sign_mode: SignMode::Test {
                             verify_signature: false,
-                            signtool_args: Vec::new(),
+                            signtool_args: None,
                         },
                         inf2cat_args: None,
                         target_platform: TargetPlatform::Universal,
@@ -922,7 +923,7 @@ mod tests {
             sample_class: false,
             sign_mode: SignMode::Test {
                 verify_signature: false,
-                signtool_args: Vec::new(),
+                signtool_args: None,
             },
             inf2cat_args: None,
             target_platform: TargetPlatform::Universal,
@@ -967,7 +968,7 @@ mod tests {
             sample_class: false,
             sign_mode: SignMode::Test {
                 verify_signature: false,
-                signtool_args: Vec::new(),
+                signtool_args: None,
             },
             inf2cat_args: Some(Vec::new()),
             target_platform: TargetPlatform::Universal,
@@ -1009,7 +1010,7 @@ mod tests {
             sample_class: false,
             sign_mode: SignMode::Test {
                 verify_signature: false,
-                signtool_args: Vec::new(),
+                signtool_args: None,
             },
             inf2cat_args: Some(vec![
                 "/os:10_x64,10_CO_X64".to_string(),
@@ -1260,14 +1261,14 @@ mod tests {
                 sample_class: false,
                 sign_mode: SignMode::Test {
                     verify_signature: false,
-                    signtool_args: vec![
+                    signtool_args: Some(vec![
                         "/s".to_string(),
                         "MyStore".to_string(),
                         "/n".to_string(),
                         "MyCert".to_string(),
                         "/fd".to_string(),
                         "SHA256".to_string(),
-                    ],
+                    ]),
                 },
                 inf2cat_args: None,
                 target_platform: TargetPlatform::Universal,
