@@ -84,6 +84,9 @@ Driver Signing:
 Inf2Cat Options:
       --inf2cat-args <ARGS>        Custom arguments to pass to `inf2cat` when generating the catalog file, e.g. `--inf2cat-args '/os:10_x64,10_GE_X64 /uselocaltime'`
 
+InfVerif Options:
+      --infverif-args <ARGS>       Custom arguments to pass to `infverif` when validating the INF, e.g. `--infverif-args '/rulever 10.0.22621 /info'`
+
 Feature Selection:
       --all-features         Activate all available features
       --no-default-features  Do not activate the `default` feature
@@ -111,6 +114,10 @@ If you have a workspace with a mix of sample and non-sample driver projects, the
 #### Customizing `inf2cat` arguments
 
 To target a specific set of Windows versions or to customize the behaviour of `inf2cat` in any other way, pass `--inf2cat-args` with a string of the arguments to forward to `inf2cat`. `cargo-wdk` itself provides the `/driver` argument so do not include it or its alias `/drv`.
+
+#### Customizing `infverif` arguments
+
+To customize the behaviour of `infverif`, pass `--infverif-args` with arguments to forward to `infverif`. Args `-h`, `-w`, `-u` and paths to `.INF` files are not allowed because they are always supplied by `cargo-wdk` itself.
 
 #### Signing and Verification
 

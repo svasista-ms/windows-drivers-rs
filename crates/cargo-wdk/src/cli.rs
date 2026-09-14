@@ -164,6 +164,18 @@ pub struct BuildArgs {
     )]
     pub inf2cat_args: Option<PassthroughArgs>,
 
+    /// Custom arguments to pass to `infverif` when validating the INF,
+    /// e.g. `--infverif-args '/rulever 10.0.22621 /info'`.
+    #[arg(
+        long,
+        value_name = "ARGS",
+        // `infverif` args can be `-` prefixed.
+        allow_hyphen_values = true,
+        value_parser = parse_passthrough_args,
+        help_heading = "InfVerif Options"
+    )]
+    pub infverif_args: Option<PassthroughArgs>,
+
     /// Assert that `Cargo.lock` will remain unchanged
     #[arg(long)]
     pub locked: bool,
@@ -225,6 +237,37 @@ impl BuildArgs {
                     ),
                 ));
             }
+        }
+        Ok(Some(args))
+    }
+
+    /// Resolves the arguments to forward to `infverif`. Rejects the arguments
+    /// cargo-wdk supplies itself: the mode flags derived from the
+    /// `--target-platform` option and the INF file path.
+    fn infverif_args(&self) -> Result<Option<Vec<String>>, clap::Error> {
+        const MODE_FLAGS: [&str; 3] = ["h", "w", "u"];
+
+        let Some(args) = self.infverif_args.clone().map(|parsed| parsed.0) else {
+            return Ok(None);
+        };
+        for arg in &args {
+            let mode_flag = arg.trim_start_matches(['/', '-']).to_ascii_lowercase();
+            let reason = if MODE_FLAGS.contains(&mode_flag.as_str()) {
+                format!(
+                    "cargo-wdk derives the mode flag `{arg}` from the `--target-platform` option"
+                )
+            } else if Path::new(arg)
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("inf"))
+            {
+                "cargo-wdk supplies the INF file path itself".to_string()
+            } else {
+                continue;
+            };
+            return Err(Cli::command().error(
+                ErrorKind::ArgumentConflict,
+                format!("`--infverif-args` must not contain `{arg}`; {reason}"),
+            ));
         }
         Ok(Some(args))
     }
@@ -355,6 +398,7 @@ impl Cli {
             Subcmd::Build(cli_args) => {
                 let sign_mode = cli_args.sign_mode()?;
                 let inf2cat_args = cli_args.inf2cat_args()?;
+                let infverif_args = cli_args.infverif_args()?;
                 BuildAction::new(
                     &BuildActionParams {
                         working_dir: Path::new("."), // Using current dir as working dir
@@ -362,6 +406,7 @@ impl Cli {
                         target_arch: cli_args.target_arch,
                         sign_mode,
                         inf2cat_args,
+                        infverif_args,
                         is_sample_class: cli_args.sample,
                         locked: cli_args.locked,
                         target_platform: cli_args.target_platform.into(),
@@ -555,6 +600,70 @@ mod tests {
                 args.inf2cat_args().expect("should resolve"),
                 Some(vec!["/os:10_x64".to_string(), "/uselocaltime".to_string()])
             );
+        }
+
+        fn assert_infverif_args_rejected(value: &str, expected_reason: &str) {
+            let args = parse_build_args(&["--infverif-args", value]).expect("args should parse");
+            let err = args
+                .infverif_args()
+                .expect_err("reserved argument should be rejected");
+            assert!(
+                err.to_string().contains(expected_reason),
+                "unexpected error for {value:?}: {err}"
+            );
+        }
+
+        #[test]
+        fn infverif_args_rejects_mode_flags() {
+            for (value, mode_flag) in [
+                ("/h", "/h"),
+                ("-w", "-w"),
+                ("/U", "/U"),
+                ("/info -w", "-w"),
+                ("-info /w", "/w"),
+                ("/rulever 10.0.22621 -h /info /w pkg.inf", "-h"),
+            ] {
+                assert_infverif_args_rejected(
+                    value,
+                    &format!(
+                        "cargo-wdk derives the mode flag `{mode_flag}` from the \
+                         `--target-platform` option"
+                    ),
+                );
+            }
+        }
+
+        #[test]
+        fn infverif_args_rejects_inf_paths() {
+            for value in [
+                "extra.inf",
+                "/info C:\\pkg\\other.INF",
+                "-info C:\\pkg\\other.INF",
+            ] {
+                assert_infverif_args_rejected(value, "cargo-wdk supplies the INF file path itself");
+            }
+        }
+
+        #[test]
+        fn infverif_args_allows_other_args() {
+            for (value, expected) in [
+                (
+                    "/rulever 10.0.22621 -info",
+                    ["/rulever", "10.0.22621", "-info"],
+                ),
+                (
+                    "-rulever 10.0.22621 /info",
+                    ["-rulever", "10.0.22621", "/info"],
+                ),
+            ] {
+                let args =
+                    parse_build_args(&["--infverif-args", value]).expect("args should parse");
+                assert_eq!(
+                    args.infverif_args().expect("should resolve"),
+                    Some(expected.map(str::to_string).to_vec()),
+                    "unexpected args for {value:?}"
+                );
+            }
         }
     }
 

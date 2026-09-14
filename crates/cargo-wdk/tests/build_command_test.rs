@@ -745,6 +745,25 @@ fn kmdf_driver_with_custom_inf2cat_args_builds_successfully() {
     );
 }
 
+#[test]
+fn kmdf_driver_with_custom_infverif_args_builds_successfully() {
+    let stderr = clean_build_and_verify_project(
+        "kmdf",
+        "kmdf-driver",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        Some(&["--infverif-args", "-rulever 10.0.22621 /stampinf", "-v"]),
+    );
+    assert!(
+        stderr.contains("\"-rulever\", \"10.0.22621\", \"/stampinf\""),
+        "expected `--infverif-args` to be forwarded to `infverif`; stderr:\n{stderr}"
+    );
+}
+
 #[allow(clippy::too_many_arguments)]
 fn clean_build_and_verify_project(
     driver_type: &str,
