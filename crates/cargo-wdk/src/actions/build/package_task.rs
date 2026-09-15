@@ -362,9 +362,6 @@ impl<'a> PackageTask<'a> {
     }
 
     fn run_stampinf(&self) -> Result<(), PackageTaskError> {
-        const STAMPINF_DATE_ARG: &str = "d";
-        const STAMPINF_VERSION_ARG: &str = "v";
-
         info!("Running stampinf");
         let wdf_version_flags = match self.driver_model {
             DriverConfig::Kmdf(kmdf_config) => {
@@ -392,11 +389,11 @@ impl<'a> PackageTask<'a> {
         let arch = self.arch.to_string();
         let mut args: Vec<&str> = vec!["-f", &dest_inf_file_path];
 
-        if !self.stampinf_args_contains(STAMPINF_DATE_ARG) {
+        if !self.stampinf_args_contains("d") {
             args.extend(["-d", "*"]);
         }
         args.extend(["-a", &arch, "-c", &cat_file_path]);
-        if self.stampinf_args_contains(STAMPINF_VERSION_ARG) {
+        if self.stampinf_args_contains("v") {
             debug!("Using -v from --stampinf-args to set DriverVer");
         } else {
             match std::env::var(STAMPINF_VERSION_ENV_VAR) {
@@ -939,11 +936,7 @@ mod tests {
         }
     }
 
-    fn stampinf_args_works_with_defaults(
-        env_version: Option<&str>,
-        stampinf_args: &[&str],
-        expected: &[&str],
-    ) {
+    fn assert_stampinf_args(env_version: Option<&str>, stampinf_args: &[&str], expected: &[&str]) {
         let working_dir = PathBuf::from("C:/abs/driver");
         let target_dir = PathBuf::from("C:/abs/driver/target/debug");
         let arch = CpuArchitecture::Amd64;
@@ -964,13 +957,20 @@ mod tests {
         let wdk_build = WdkBuild::default();
         let fs = Fs::default();
         let mut command_exec = CommandExec::default();
+        let expected_inf_file_path = target_dir
+            .join("driver_package")
+            .join("driver.inf")
+            .to_string_lossy()
+            .into_owned();
         let expected: Vec<String> = expected.iter().map(ToString::to_string).collect();
         command_exec
             .expect_run()
             .withf(move |cmd: &str, args: &[&str], _, _| {
-                // Skip the `-f <inf path>` prefix, whose path is environment
-                // specific.
-                cmd == "stampinf" && args[2..] == expected[..]
+                cmd == "stampinf"
+                    && args.len() >= 2
+                    && args[0] == "-f"
+                    && args[1] == expected_inf_file_path
+                    && args[2..] == expected[..]
             })
             .once()
             .return_once(|_, _, _, _| {
@@ -1000,7 +1000,7 @@ mod tests {
 
     #[test]
     fn run_stampinf_appends_custom_args_after_the_defaults() {
-        stampinf_args_works_with_defaults(
+        assert_stampinf_args(
             None,
             &["/p", "Contoso Ltd", "-n"],
             &[
@@ -1023,7 +1023,7 @@ mod tests {
 
     #[test]
     fn run_stampinf_drops_default_date_and_version_when_caller_supplies_them() {
-        stampinf_args_works_with_defaults(
+        assert_stampinf_args(
             None,
             &["-d", "01/01/2026", "/V", "1.2.3.4"],
             &[
@@ -1043,7 +1043,7 @@ mod tests {
 
     #[test]
     fn run_stampinf_caller_version_wins_over_env_var() {
-        stampinf_args_works_with_defaults(
+        assert_stampinf_args(
             Some("9.9.9.9"),
             &["/v", "1.2.3.4"],
             &[

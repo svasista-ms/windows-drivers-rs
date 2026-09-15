@@ -246,7 +246,7 @@ impl BuildArgs {
     /// `-k` and `-u`.
     /// Returns a `clap::Error` if the caller-supplied arguments are invalid.
     fn stampinf_args(&self) -> Result<Option<Vec<String>>, clap::Error> {
-        const STAMPINF_RESERVED_ARGS: [&str; 5] = ["f", "a", "c", "k", "u"];
+        const RESERVED_ARGS: [&str; 5] = ["f", "a", "c", "k", "u"];
         let Some(args) = self.stampinf_args.clone().map(|parsed| parsed.0) else {
             return Ok(None);
         };
@@ -255,11 +255,11 @@ impl BuildArgs {
             let Some(arg_name) = arg.strip_prefix(['-', '/']) else {
                 continue;
             };
-            if STAMPINF_RESERVED_ARGS
+            if RESERVED_ARGS
                 .iter()
                 .any(|reserved| arg_name.eq_ignore_ascii_case(reserved))
             {
-                let reserved_args = STAMPINF_RESERVED_ARGS
+                let reserved_args = RESERVED_ARGS
                     .iter()
                     .map(|arg| format!("`-{arg}`"))
                     .collect::<Vec<_>>()
