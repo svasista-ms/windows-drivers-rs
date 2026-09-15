@@ -87,6 +87,9 @@ Inf2Cat Options:
 Stampinf Options:
       --stampinf-args <ARGS>  Custom arguments to pass to `stampinf` when generating the INF file, e.g. `--stampinf-args '-d 01/01/2026 -v 1.2.3.4 -p "Contoso Ltd"'`
 
+InfVerif Options:
+      --infverif-args <ARGS>       Custom arguments to pass to `infverif` when validating the INF, e.g. `--infverif-args '/rulever 10.0.22621 /info'`
+
 Feature Selection:
       --all-features         Activate all available features
       --no-default-features  Do not activate the `default` feature
@@ -118,6 +121,10 @@ To customize the behaviour of `stampinf`, pass `--stampinf-args` with arguments 
 #### Customizing `inf2cat` arguments
 
 To target a specific set of Windows versions or to customize the behaviour of `inf2cat` in any other way, pass `--inf2cat-args` with a string of the arguments to forward to `inf2cat`. `cargo-wdk` itself provides the `/driver` argument so do not include it or its alias `/drv`.
+
+#### Customizing `infverif` arguments
+
+To customize the behaviour of `infverif`, pass `--infverif-args` with arguments to forward to `infverif`. Args `-h`, `-w`, `-u` and paths to `.INF` files are not allowed because they are always supplied by `cargo-wdk` itself.
 
 #### Signing and Verification
 

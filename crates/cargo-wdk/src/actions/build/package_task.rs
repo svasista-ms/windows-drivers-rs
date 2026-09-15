@@ -86,6 +86,7 @@ pub struct PackageTaskParams<'a> {
     pub sign_mode: SignMode,
     pub inf2cat_args: Option<Vec<String>>,
     pub stampinf_args: Option<Vec<String>>,
+    pub infverif_args: Option<Vec<String>>,
     pub sample_class: bool,
     pub driver_model: DriverConfig,
     pub target_platform: TargetPlatform,
@@ -97,6 +98,7 @@ pub struct PackageTask<'a> {
     sign_mode: SignMode,
     inf2cat_args: Option<Vec<String>>,
     stampinf_args: Option<Vec<String>>,
+    infverif_args: Option<Vec<String>>,
     sample_class: bool,
 
     // src paths
@@ -104,7 +106,6 @@ pub struct PackageTask<'a> {
     src_driver_binary_file_path: PathBuf,
     src_renamed_driver_binary_file_path: PathBuf,
     src_pdb_file_path: PathBuf,
-    src_map_file_path: PathBuf,
     src_cert_file_path: PathBuf,
 
     // destination paths
@@ -112,7 +113,6 @@ pub struct PackageTask<'a> {
     dest_inf_file_path: PathBuf,
     dest_driver_binary_path: PathBuf,
     dest_pdb_file_path: PathBuf,
-    dest_map_file_path: PathBuf,
     dest_cert_file_path: PathBuf,
     dest_cat_file_path: PathBuf,
 
@@ -174,10 +174,6 @@ impl<'a> PackageTask<'a> {
             .target_dir
             .join(format!("{package_name}.{src_driver_binary_extension}"));
         let src_pdb_file_path = params.target_dir.join(format!("{package_name}.pdb"));
-        let src_map_file_path = params
-            .target_dir
-            .join("deps")
-            .join(format!("{package_name}.map"));
         let src_cert_file_path = params.target_dir.join(format!("{WDR_LOCAL_TEST_CERT}.cer"));
 
         // destination paths
@@ -195,7 +191,6 @@ impl<'a> PackageTask<'a> {
         let dest_driver_binary_path =
             dest_root_package_folder.join(format!("{package_name}.{dest_driver_binary_extension}"));
         let dest_pdb_file_path = dest_root_package_folder.join(format!("{package_name}.pdb"));
-        let dest_map_file_path = dest_root_package_folder.join(format!("{package_name}.map"));
         let dest_cert_file_path =
             dest_root_package_folder.join(format!("{WDR_LOCAL_TEST_CERT}.cer"));
         let dest_cat_file_path = dest_root_package_folder.join(format!("{package_name}.cat"));
@@ -210,18 +205,17 @@ impl<'a> PackageTask<'a> {
             sign_mode: params.sign_mode,
             inf2cat_args: params.inf2cat_args,
             stampinf_args: params.stampinf_args,
+            infverif_args: params.infverif_args,
             sample_class: params.sample_class,
             src_inx_file_path,
             src_driver_binary_file_path,
             src_renamed_driver_binary_file_path,
             src_pdb_file_path,
-            src_map_file_path,
             src_cert_file_path,
             dest_root_package_folder,
             dest_inf_file_path,
             dest_driver_binary_path,
             dest_pdb_file_path,
-            dest_map_file_path,
             dest_cert_file_path,
             dest_cat_file_path,
             arch: params.target_arch,
@@ -284,7 +278,6 @@ impl<'a> PackageTask<'a> {
         )?;
         self.copy(&self.src_pdb_file_path, &self.dest_pdb_file_path)?;
         self.copy(&self.src_inx_file_path, &self.dest_inf_file_path)?;
-        self.copy(&self.src_map_file_path, &self.dest_map_file_path)?;
         self.run_stampinf()?;
         self.run_inf2cat()?;
         self.run_infverif()?;
@@ -652,6 +645,9 @@ impl<'a> PackageTask<'a> {
         if self.sample_class {
             args.push(additional_args);
         }
+        if let Some(infverif_args) = &self.infverif_args {
+            args.extend(infverif_args.iter().map(String::as_str));
+        }
         args.push(&inf_path);
 
         if let Err(e) = self.command_exec.run("infverif", &args, None, None) {
@@ -748,6 +744,7 @@ mod tests {
             },
             inf2cat_args: None,
             stampinf_args: None,
+            infverif_args: None,
             target_platform: TargetPlatform::Universal,
         };
         let dest_root = target_dir.join(format!("{package_name}_package"));
@@ -776,10 +773,6 @@ mod tests {
         );
         assert_eq!(task.src_pdb_file_path, target_dir.join("test_package.pdb"));
         assert_eq!(
-            task.src_map_file_path,
-            target_dir.join("deps").join("test_package.map")
-        );
-        assert_eq!(
             task.src_cert_file_path,
             target_dir.join("WDRLocalTestCert.cer")
         );
@@ -790,7 +783,6 @@ mod tests {
             dest_root.join("test_package.sys")
         );
         assert_eq!(task.dest_pdb_file_path, dest_root.join("test_package.pdb"));
-        assert_eq!(task.dest_map_file_path, dest_root.join("test_package.map"));
         assert_eq!(
             task.dest_cert_file_path,
             dest_root.join("WDRLocalTestCert.cer")
@@ -823,6 +815,7 @@ mod tests {
             },
             inf2cat_args: None,
             stampinf_args: None,
+            infverif_args: None,
             target_platform: TargetPlatform::Universal,
         };
 
@@ -855,6 +848,7 @@ mod tests {
             },
             inf2cat_args: None,
             stampinf_args: None,
+            infverif_args: None,
             target_platform: TargetPlatform::Universal,
         };
 
@@ -896,6 +890,7 @@ mod tests {
                         },
                         inf2cat_args: None,
                         stampinf_args: None,
+                        infverif_args: None,
                         target_platform: TargetPlatform::Universal,
                     };
 
@@ -951,6 +946,7 @@ mod tests {
             sign_mode: SignMode::Off,
             inf2cat_args: None,
             stampinf_args: Some(stampinf_args.iter().map(ToString::to_string).collect()),
+            infverif_args: None,
             target_platform: TargetPlatform::Universal,
         };
 
@@ -1080,6 +1076,7 @@ mod tests {
             },
             inf2cat_args: None,
             stampinf_args: None,
+            infverif_args: None,
             target_platform: TargetPlatform::Universal,
         };
 
@@ -1126,6 +1123,7 @@ mod tests {
             },
             inf2cat_args: Some(Vec::new()),
             stampinf_args: None,
+            infverif_args: None,
             target_platform: TargetPlatform::Universal,
         };
 
@@ -1172,6 +1170,7 @@ mod tests {
                 "/verbose".to_string(),
             ]),
             stampinf_args: None,
+            infverif_args: None,
             target_platform: TargetPlatform::Universal,
         };
 
@@ -1231,6 +1230,7 @@ mod tests {
                 sign_mode: SignMode::Off,
                 inf2cat_args: None,
                 stampinf_args: None,
+                infverif_args: None,
                 target_platform: TargetPlatform::Universal,
             };
             PackageTask::new(params, wdk_build, command_exec, fs)
@@ -1429,6 +1429,7 @@ mod tests {
                 },
                 inf2cat_args: None,
                 stampinf_args: None,
+                infverif_args: None,
                 target_platform: TargetPlatform::Universal,
             };
             let task = PackageTask::new(params, &wdk_build, &command_exec, &fs);
@@ -1457,6 +1458,7 @@ mod tests {
             sign_mode: SignMode::Off,
             inf2cat_args: None,
             stampinf_args: None,
+            infverif_args: None,
             target_platform,
         };
 
@@ -1517,6 +1519,64 @@ mod tests {
             TargetPlatform::Windows,
             "/w",
         );
+    }
+
+    #[test]
+    fn run_infverif_with_custom_args_forwards_them_verbatim() {
+        let working_dir = PathBuf::from("C:/abs/driver");
+        let target_dir = PathBuf::from("C:/abs/driver/target/debug");
+        let arch = CpuArchitecture::Amd64;
+
+        let params = PackageTaskParams {
+            package_name: "driver",
+            working_dir: &working_dir,
+            target_dir: &target_dir,
+            target_arch: &arch,
+            driver_model: DriverConfig::Kmdf(KmdfConfig::default()),
+            sample_class: true,
+            sign_mode: SignMode::Off,
+            inf2cat_args: None,
+            stampinf_args: None,
+            infverif_args: Some(vec![
+                "/rulever".to_string(),
+                "10.0.22621".to_string(),
+                "/info".to_string(),
+            ]),
+            target_platform: TargetPlatform::Universal,
+        };
+
+        let fs = Fs::default();
+        let mut wdk_build = WdkBuild::default();
+        wdk_build
+            .expect_detect_wdk_build_number()
+            .once()
+            .returning(|| Ok(26101));
+
+        let expected_args_before_inf = ["/v", "/u", "/samples", "/rulever", "10.0.22621", "/info"];
+        let expected_inf_path = target_dir
+            .join("driver_package")
+            .join("driver.inf")
+            .to_string_lossy()
+            .to_string();
+        let mut command_exec = CommandExec::default();
+        command_exec
+            .expect_run()
+            .withf(move |cmd: &str, args: &[&str], _, _| {
+                cmd == "infverif"
+                    && args[..args.len() - 1] == expected_args_before_inf
+                    && args[args.len() - 1] == expected_inf_path
+            })
+            .once()
+            .returning(|_, _, _, _| {
+                Ok(Output {
+                    status: ExitStatus::default(),
+                    stdout: vec![],
+                    stderr: vec![],
+                })
+            });
+
+        let task = PackageTask::new(params, &wdk_build, &command_exec, &fs);
+        assert!(task.run_infverif().is_ok());
     }
 
     mod named_mutex {
