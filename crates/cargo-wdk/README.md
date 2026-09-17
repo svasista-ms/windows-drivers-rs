@@ -82,7 +82,10 @@ Driver Signing:
       --verify-signature       Verify the signatures of the driver binary and catalog file after signing
 
 Inf2Cat Options:
-      --inf2cat-args <ARGS>        Custom arguments to pass to `inf2cat` when generating the catalog file, e.g. `--inf2cat-args '/os:10_x64,10_GE_X64 /uselocaltime'`
+      --inf2cat-args <ARGS>  Custom arguments to pass to `inf2cat` when generating the catalog file, e.g. `--inf2cat-args '/os:10_x64,10_GE_X64 /uselocaltime'`
+
+Stampinf Options:
+      --stampinf-args <ARGS>  Custom arguments to pass to `stampinf` when generating the INF file, e.g. `--stampinf-args '-d 01/01/2026 -v 1.2.3.4 -p "Contoso Ltd"'`
 
 InfVerif Options:
       --infverif-args <ARGS>       Custom arguments to pass to `infverif` when validating the INF, e.g. `--infverif-args '/rulever 10.0.22621 /info'`
@@ -110,6 +113,10 @@ When the command completes the packaged driver artifacts are emitted at the path
 Building a sample driver requires the `--sample` flag. If it is not specified, the build will fail.
 
 If you have a workspace with a mix of sample and non-sample driver projects, the build will fail as that scenario is not supported yet. In the future `build` will be able to automatically detect sample projects. That will remove the need for the `--sample` flag and enable support for this scenario.
+
+#### Customizing `stampinf` arguments
+
+To customize the behaviour of `stampinf`, pass `--stampinf-args` with arguments to forward to `stampinf`. Args `-f`, `-a`, `-c`, `-k` and `-u` are not allowed because they are always supplied by `cargo-wdk` itself.
 
 #### Customizing `inf2cat` arguments
 
