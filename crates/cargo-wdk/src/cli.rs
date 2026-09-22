@@ -110,6 +110,7 @@ impl NewArgs {
 
 /// Arguments for the `build` subcommand
 #[derive(Debug, Args)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct BuildArgs {
     /// Build artifacts with the specified profile
     #[arg(long, ignore_case = true)]
@@ -191,6 +192,10 @@ pub struct BuildArgs {
     /// Assert that `Cargo.lock` will remain unchanged
     #[arg(long)]
     pub locked: bool,
+
+    /// Build all packages in the workspace
+    #[arg(long)]
+    pub workspace: bool,
 
     #[command(flatten)]
     #[clap(next_help_heading = "Feature Selection")]
@@ -458,6 +463,7 @@ impl Cli {
                         infverif_args,
                         is_sample_class: cli_args.sample,
                         locked: cli_args.locked,
+                        workspace: cli_args.workspace,
                         target_platform: cli_args.target_platform.into(),
                         features: &cli_args.features,
                         verbosity_level: self.verbose,
@@ -599,6 +605,12 @@ mod tests {
                 args.sign_mode().expect("mapping should succeed"),
                 SignMode::Off
             );
+        }
+
+        #[test]
+        fn workspace_flag_maps_correctly() {
+            let args = parse_build_args(&["--workspace"]).expect("args should parse");
+            assert!(args.workspace);
         }
 
         #[test]

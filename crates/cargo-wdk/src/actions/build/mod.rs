@@ -84,6 +84,7 @@ pub struct BuildActionParams<'a> {
     pub infverif_args: Option<Vec<String>>,
     pub is_sample_class: bool,
     pub locked: bool,
+    pub workspace: bool,
     pub target_platform: TargetPlatform,
     pub features: &'a Features,
     pub verbosity_level: clap_verbosity_flag::Verbosity,
@@ -101,6 +102,7 @@ pub struct BuildAction<'a> {
     infverif_args: Option<Vec<String>>,
     is_sample_class: bool,
     locked: bool,
+    workspace: bool,
     target_platform: TargetPlatform,
     features: &'a Features,
     verbosity_level: clap_verbosity_flag::Verbosity,
@@ -152,6 +154,7 @@ impl<'a> BuildAction<'a> {
             infverif_args: params.infverif_args.clone(),
             is_sample_class: params.is_sample_class,
             locked: params.locked,
+            workspace: params.workspace,
             target_platform: params.target_platform,
             features: params.features,
             verbosity_level: params.verbosity_level,
@@ -203,6 +206,17 @@ impl<'a> BuildAction<'a> {
 
         // Standalone driver/driver workspace support
         if self.fs.exists(&self.working_dir.join("Cargo.toml")) {
+            if self.workspace {
+                let cargo_metadata = self.get_cargo_metadata(&self.working_dir)?;
+                let workspace_root = absolute(cargo_metadata.workspace_root.as_std_path())
+                    .map_err(|e| {
+                        BuildActionError::NotAbsolute(
+                            cargo_metadata.workspace_root.clone().into(),
+                            e,
+                        )
+                    })?;
+                return self.run_from_workspace_root(&workspace_root);
+            }
             return self.run_from_workspace_root(&self.working_dir);
         }
 

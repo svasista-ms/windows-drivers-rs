@@ -1749,6 +1749,7 @@ fn initialize_build_action<'a>(
             infverif_args: None,
             is_sample_class: sample_class,
             locked: test_build_action.locked,
+            workspace: false,
             target_platform: TargetPlatform::Universal,
             features: &test_build_action.features,
             verbosity_level: clap_verbosity_flag::Verbosity::new(1, 0),
