@@ -61,9 +61,6 @@ jobs:
 
       - name: Install Winget
         uses: ./.github/actions/install-winget
-        with:
-          # windows-11-arm runner image does not include winget-cli (see https://github.com/actions/partner-runner-images/issues/95).
-          force-cli-install: ${{ matrix.runner.name == 'windows-11-arm' && 'true' || 'false' }}
 
       - name: Install LLVM ${{ matrix.llvm }}
         uses: ./.github/actions/install-llvm

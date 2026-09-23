@@ -1,10 +1,10 @@
 name: Install Winget
-description: Install the Microsoft.WinGet.Client module from PSGallery and optionally force-install the matching WinGet CLI for images where it is absent.
+description: Install the Microsoft.WinGet.Client module from PSGallery and force-install a compatible WinGet CLI.
 inputs:
   force-cli-install:
-    description: Set to `true` to force install the latest WinGet CLI (only accepts `true` or `false`). Useful on images where WinGet may be absent (e.g. Windows ARM64 partner images).
+    description: When `true` (default), download and install a pinned WinGet CLI release before installing the matching Microsoft.WinGet.Client module. Set to `false` to keep whatever WinGet CLI the runner image already has instead.
     required: false
-    default: 'false'
+    default: 'true'
 runs:
   using: composite
   steps:
@@ -34,6 +34,13 @@ runs:
         $outputLine = "force-cli-install=$normalized"
         [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, "$outputLine`n", [System.Text.Encoding]::UTF8)
 
+    - name: Set pinned WinGet version
+      shell: pwsh
+      run: |
+        Set-StrictMode -Version Latest
+        $pinnedVersion = '1.29.380'
+        Add-Content -Path $env:GITHUB_ENV -Value "WINGET_PINNED_VERSION=$pinnedVersion"
+
     # Some hosted images (e.g. https://github.com/actions/partner-runner-images/issues/95) do not ship winget-cli.
     # Repair-WinGetPackageManager uses unauthenticated Octokit calls that hit GitHub API rate limits in CI
     # (https://github.com/microsoft/winget-cli/issues/5949).
@@ -50,9 +57,7 @@ runs:
         $downloadDir = Join-Path $env:TEMP 'winget-install'
         New-Item -ItemType Directory -Path $downloadDir -Force | Out-Null
 
-        # Resolve the latest release tag once to avoid a race between downloads
-        $releaseTag = gh release view --repo $repo --json tagName --jq '.tagName'
-        if ($LASTEXITCODE -ne 0) { throw "Failed to query release tag from $repo" }
+        $releaseTag = "v$env:WINGET_PINNED_VERSION"
 
         # Download the release assets (msixbundle + dependency packages) using authenticated gh CLI
         gh release download $releaseTag --repo $repo --pattern '*.msixbundle' --dir $downloadDir --clobber
@@ -106,6 +111,23 @@ runs:
         Write-Host "Installing: $($bundle.Name)"
         Add-AppxPackage -Path $bundle.FullName -ForceApplicationShutdown -ForceUpdateFromAnyVersion
 
+        $targetCliVersion = $releaseTag.TrimStart('v')
+        Write-Host "Removing other WinGet CLI package versions"
+        $removedCliVersions = @()
+        Get-AppxPackage -Name 'Microsoft.DesktopAppInstaller' |
+          Where-Object { $_.Version -ne $targetCliVersion } |
+          ForEach-Object {
+              Remove-AppxPackage -Package $_.PackageFullName -ErrorAction SilentlyContinue
+              $removedCliVersions += $_.Version
+          }
+        Write-Host "Removed versions: $($removedCliVersions -join ', ')"
+
+        $installedCliVersion = (winget --version).Trim() -replace '^v', ''
+        if ($installedCliVersion -ne $targetCliVersion) {
+          throw "WinGet CLI version mismatch after install: expected $targetCliVersion, got $installedCliVersion"
+        }
+        Write-Host "Installed WinGet CLI version: $installedCliVersion"
+
     - name: Install matching WinGet PowerShell module
       shell: pwsh
       run: |
@@ -121,47 +143,34 @@ runs:
         }
 
         $cliVersion = (winget --version).Trim() -replace '^v', ''
-        $cliMajor = ($cliVersion -split '\.')[0]
-        Write-Host "WinGet CLI version: $cliVersion (major: $cliMajor)"
+        Write-Host "WinGet CLI version: $cliVersion"
 
-        # The module talks to the CLI's COM server, so its version must be close to the CLI's
-        # version or activation fails with "Failed to create instance" (RPC unavailable-style
-        # errors), even though both are nominally the same major version. Picking the newest
-        # module in the whole major range (e.g. CLI 1.11.510 -> module 1.29.380) can select a
-        # module built against a COM interface the older, preinstalled CLI doesn't implement.
-        # Instead, pick the available module version closest to the CLI version: the highest
-        # version that does not exceed it, falling back to the lowest version that exceeds it.
-        $found = Find-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -Version $cliVersion -ErrorAction SilentlyContinue
-        if ($found) {
-          $targetVersion = $cliVersion
-          Write-Host "Installing exact matching module version: $targetVersion"
-          Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -Version $targetVersion -TrustRepository -Quiet
-        } else {
-          $cliVersionObj = [version]$cliVersion
-          $allVersions = Find-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -Version "[$cliMajor.0.0, $([int]$cliMajor + 1).0.0)" -ErrorAction SilentlyContinue
-          if ($allVersions) {
-            $notNewer = $allVersions | Where-Object { [version]$_.Version -le $cliVersionObj } | Sort-Object { [version]$_.Version } -Descending | Select-Object -First 1
-            if ($notNewer) {
-              $targetVersion = $notNewer.Version
-              Write-Host "No Microsoft.WinGet.Client version $cliVersion found. Installing closest version not newer than the CLI: $targetVersion"
-            } else {
-              $targetVersion = ($allVersions | Sort-Object { [version]$_.Version } | Select-Object -First 1).Version
-              Write-Host "No Microsoft.WinGet.Client module with version lesser than or equal to CLI $cliVersion found on PSGallery. Installing the lowest matching version: $targetVersion"
-            }
-            Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -Version $targetVersion -TrustRepository -Quiet
-          } else {
-            Write-Warning "No module with major version $cliMajor found on PSGallery. Installing latest version."
-            Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -TrustRepository -Quiet
-            $targetVersion = (Get-InstalledPSResource -Name Microsoft.WinGet.Client | Sort-Object Version -Descending | Select-Object -First 1).Version.ToString()
-          }
+        $targetVersion = $env:WINGET_PINNED_VERSION
+        if ($cliVersion -ne $targetVersion) {
+          Write-Warning "Installed WinGet CLI ($cliVersion) does not match the pinned Microsoft.WinGet.Client version ($targetVersion)."
+        }
+        Write-Host "Installing module version: $targetVersion"
+        Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -Version $targetVersion -TrustRepository -Quiet
+
+        if (-not (Get-InstalledPSResource -Name Microsoft.WinGet.Client -Version $targetVersion -ErrorAction SilentlyContinue)) {
+          throw "Microsoft.WinGet.Client $targetVersion was not found installed after Install-PSResource; refusing to remove other versions."
         }
 
+        Write-Host "Removing other Microsoft.WinGet.Client module versions"
+        $removedModuleVersions = @()
         Get-InstalledPSResource -Name Microsoft.WinGet.Client -ErrorAction SilentlyContinue |
           Where-Object { $_.Version.ToString() -ne $targetVersion } |
           ForEach-Object {
-              Write-Host "Removing competing module version: $($_.Version)"
               Uninstall-PSResource -Name Microsoft.WinGet.Client -Version $_.Version.ToString() -SkipDependencyCheck -ErrorAction SilentlyContinue
+              $removedModuleVersions += $_.Version.ToString()
           }
+        Write-Host "Removed versions: $($removedModuleVersions -join ', ')"
+
+        $remaining = Get-InstalledPSResource -Name Microsoft.WinGet.Client -ErrorAction SilentlyContinue |
+          Where-Object { $_.Version.ToString() -ne $targetVersion }
+        if ($remaining) {
+          throw "Failed to remove competing Microsoft.WinGet.Client version(s): $($remaining.Version -join ', ')"
+        }
 
         $moduleVersion = (Get-InstalledPSResource -Name Microsoft.WinGet.Client | Sort-Object Version -Descending | Select-Object -First 1).Version.ToString()
         Write-Host "Installed module version: $moduleVersion"
