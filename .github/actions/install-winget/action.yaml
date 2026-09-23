@@ -124,16 +124,29 @@ runs:
         $cliMajor = ($cliVersion -split '\.')[0]
         Write-Host "WinGet CLI version: $cliVersion (major: $cliMajor)"
 
-        # Try exact match first, then best matching major version, then latest
+        # The module talks to the CLI's COM server, so its version must be close to the CLI's
+        # version or activation fails with "Failed to create instance" (RPC unavailable-style
+        # errors), even though both are nominally the same major version. Picking the newest
+        # module in the whole major range (e.g. CLI 1.11.510 -> module 1.29.380) can select a
+        # module built against a COM interface the older, preinstalled CLI doesn't implement.
+        # Instead, pick the available module version closest to the CLI version: the highest
+        # version that does not exceed it, falling back to the lowest version that exceeds it.
         $found = Find-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -Version $cliVersion -ErrorAction SilentlyContinue
         if ($found) {
           Write-Host "Installing exact matching module version: $cliVersion"
           Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -Version $cliVersion -TrustRepository -Quiet
         } else {
+          $cliVersionObj = [version]$cliVersion
           $allVersions = Find-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -Version "[$cliMajor.0.0, $([int]$cliMajor + 1).0.0)" -ErrorAction SilentlyContinue
           if ($allVersions) {
-            $best = ($allVersions | Sort-Object Version -Descending | Select-Object -First 1).Version
-            Write-Host "Exact match not found. Installing latest module with matching major version: $best"
+            $notNewer = $allVersions | Where-Object { [version]$_.Version -le $cliVersionObj } | Sort-Object { [version]$_.Version } -Descending | Select-Object -First 1
+            if ($notNewer) {
+              $best = $notNewer.Version
+              Write-Host "Exact match not found. Installing closest module version not newer than the CLI: $best"
+            } else {
+              $best = ($allVersions | Sort-Object { [version]$_.Version } | Select-Object -First 1).Version
+              Write-Host "Exact match not found and no older module available. Installing closest newer module version: $best"
+            }
             Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -Version $best -TrustRepository -Quiet
           } else {
             Write-Warning "No module with major version $cliMajor found on PSGallery. Installing latest version."
