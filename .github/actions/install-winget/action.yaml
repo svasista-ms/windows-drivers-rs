@@ -133,26 +133,35 @@ runs:
         # version that does not exceed it, falling back to the lowest version that exceeds it.
         $found = Find-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -Version $cliVersion -ErrorAction SilentlyContinue
         if ($found) {
-          Write-Host "Installing exact matching module version: $cliVersion"
-          Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -Version $cliVersion -TrustRepository -Quiet
+          $targetVersion = $cliVersion
+          Write-Host "Installing exact matching module version: $targetVersion"
+          Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -Version $targetVersion -TrustRepository -Quiet
         } else {
           $cliVersionObj = [version]$cliVersion
           $allVersions = Find-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -Version "[$cliMajor.0.0, $([int]$cliMajor + 1).0.0)" -ErrorAction SilentlyContinue
           if ($allVersions) {
             $notNewer = $allVersions | Where-Object { [version]$_.Version -le $cliVersionObj } | Sort-Object { [version]$_.Version } -Descending | Select-Object -First 1
             if ($notNewer) {
-              $best = $notNewer.Version
-              Write-Host "Exact match not found. Installing closest module version not newer than the CLI: $best"
+              $targetVersion = $notNewer.Version
+              Write-Host "No Microsoft.WinGet.Client version $cliVersion found. Installing closest version not newer than the CLI: $targetVersion"
             } else {
-              $best = ($allVersions | Sort-Object { [version]$_.Version } | Select-Object -First 1).Version
-              Write-Host "Exact match not found and no older module available. Installing closest newer module version: $best"
+              $targetVersion = ($allVersions | Sort-Object { [version]$_.Version } | Select-Object -First 1).Version
+              Write-Host "No Microsoft.WinGet.Client module with version lesser than or equal to CLI $cliVersion found on PSGallery. Installing the lowest matching version: $targetVersion"
             }
-            Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -Version $best -TrustRepository -Quiet
+            Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -Version $targetVersion -TrustRepository -Quiet
           } else {
             Write-Warning "No module with major version $cliMajor found on PSGallery. Installing latest version."
             Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -TrustRepository -Quiet
+            $targetVersion = (Get-InstalledPSResource -Name Microsoft.WinGet.Client | Sort-Object Version -Descending | Select-Object -First 1).Version.ToString()
           }
         }
+
+        Get-InstalledPSResource -Name Microsoft.WinGet.Client -ErrorAction SilentlyContinue |
+          Where-Object { $_.Version.ToString() -ne $targetVersion } |
+          ForEach-Object {
+              Write-Host "Removing competing module version: $($_.Version)"
+              Uninstall-PSResource -Name Microsoft.WinGet.Client -Version $_.Version.ToString() -SkipDependencyCheck -ErrorAction SilentlyContinue
+          }
 
         $moduleVersion = (Get-InstalledPSResource -Name Microsoft.WinGet.Client | Sort-Object Version -Descending | Select-Object -First 1).Version.ToString()
         Write-Host "Installed module version: $moduleVersion"
