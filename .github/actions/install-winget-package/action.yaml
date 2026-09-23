@@ -55,10 +55,9 @@ runs:
                   Write-Host "Override arguments: $overrideArgs"
               }
 
-              # WinGet's COM/RPC server can take a moment to come up after the CLI/module is
-              # (re)installed, causing Get-WinGetPackage to throw "The RPC server is unavailable"
-              # (HRESULT 0x800706BA) even though the package manager is otherwise fine. Retry
-              # transient failures here instead of letting them fail the action outright.
+              # Retry only the transient RPC/COM startup failures.
+              $transientWinGetErrorPattern = '0x800706BA|RPC server is unavailable|Failed to create instance'
+
               function Get-WinGetPackageWithRetry {
                   param(
                       [string]$PackageId,
@@ -70,7 +69,7 @@ runs:
                       try {
                           return Get-WinGetPackage -Id $PackageId -Source winget -MatchOption Equals -ErrorAction Stop
                       } catch {
-                          if ($attempt -eq $MaxAttempts) {
+                          if ($attempt -eq $MaxAttempts -or $_.Exception.Message -notmatch $transientWinGetErrorPattern) {
                               throw
                           }
                           Write-Host "Get-WinGetPackage failed (attempt $attempt of $MaxAttempts): $($_.Exception.Message). Retrying in $DelaySeconds seconds..."
@@ -158,7 +157,7 @@ runs:
                   try {
                       $elapsedSeconds = [math]::Round(((Get-Date) - $verificationStartTime).TotalSeconds, 1)
                       Write-Host "Verification attempt at $elapsedSeconds seconds..."
-                      $verifyPackage = Get-WinGetPackageWithRetry -PackageId $packageId
+                      $verifyPackage = Get-WinGetPackageWithRetry -PackageId $packageId -MaxAttempts 1
 
                       if ($verifyPackage) {
                           Write-Host "✅ Final verification: $packageId is installed with version: $($verifyPackage.InstalledVersion)"
