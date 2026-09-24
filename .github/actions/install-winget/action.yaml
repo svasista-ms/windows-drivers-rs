@@ -47,11 +47,12 @@ runs:
 
         $bundle = Get-ChildItem -Path $downloadDir -Filter '*.msixbundle' | Select-Object -First 1
         if (-not $bundle) { throw 'No msixbundle found in downloaded release assets.' }
-        Add-AppxPackage -Path $bundle.FullName -ForceApplicationShutdown -ErrorAction Stop
+        Add-AppxPackage -Path $bundle.FullName -ForceApplicationShutdown -ForceUpdateFromAnyVersion -ErrorAction Stop
         $cliVersion = winget --version
         if ($LASTEXITCODE -ne 0) {
           throw "WinGet CLI failed with exit code $LASTEXITCODE."
         }
+        $cliVersion = $cliVersion.Trim() -replace '^v', ''
         Write-Host "WinGet CLI version: $cliVersion"
 
         if (-not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
@@ -64,3 +65,6 @@ runs:
         Import-Module Microsoft.WinGet.Client -Force -ErrorAction Stop
         $moduleVersion = (Get-Module -Name Microsoft.WinGet.Client).Version
         Write-Host "Loaded Microsoft.WinGet.Client version: $moduleVersion"
+        if ($moduleVersion.ToString() -ne $cliVersion) {
+          Write-Warning "Microsoft.WinGet.Client version $moduleVersion differs from WinGet CLI version $cliVersion. Continuing with the loaded module."
+        }
