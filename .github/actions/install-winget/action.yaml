@@ -1,39 +1,8 @@
 name: Install Winget
-description: Install the Microsoft.WinGet.Client module from PSGallery and force-install a compatible WinGet CLI.
-inputs:
-  force-cli-install:
-    description: When `true` (default), download and install a pinned WinGet CLI release before installing the matching Microsoft.WinGet.Client module. Set to `false` to keep whatever WinGet CLI the runner image already has instead.
-    required: false
-    default: 'true'
+description: Install a pinned, compatible pair of WinGet CLI and Microsoft.WinGet.Client PowerShell module.
 runs:
   using: composite
   steps:
-    - name: Normalize inputs
-      id: normalize
-      shell: pwsh
-      run: |
-        $raw = "${{ inputs.force-cli-install }}"
-
-        $normalizedValue = $raw.Trim().ToLowerInvariant()
-
-        switch ($normalizedValue) {
-          'true' {
-            $normalized = 'true'
-            break
-          }
-          'false' {
-            $normalized = 'false'
-            break
-          }
-          default {
-            Write-Error "Invalid force-cli-install value '$raw'. Acceptable values: true or false."
-            exit 1
-          }
-        }
-
-        $outputLine = "force-cli-install=$normalized"
-        [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, "$outputLine`n", [System.Text.Encoding]::UTF8)
-
     - name: Set pinned WinGet version
       shell: pwsh
       run: |
@@ -46,7 +15,6 @@ runs:
     # (https://github.com/microsoft/winget-cli/issues/5949).
     # Instead, use the pre-installed `gh` CLI (authenticated via GH_TOKEN) to download release assets directly.
     - name: Install WinGet CLI from GitHub release
-      if: ${{ steps.normalize.outputs.force-cli-install == 'true' }}
       env:
         GH_TOKEN: ${{ github.token }}
       shell: pwsh
@@ -115,7 +83,7 @@ runs:
         Write-Host "Removing other WinGet CLI package versions"
         $removedCliVersions = @()
         Get-AppxPackage -Name 'Microsoft.DesktopAppInstaller' |
-          Where-Object { $_.Version -ne $targetCliVersion } |
+          Where-Object { ([version]$_.Version).ToString(3) -ne $targetCliVersion } |
           ForEach-Object {
               Remove-AppxPackage -Package $_.PackageFullName -ErrorAction SilentlyContinue
               $removedCliVersions += $_.Version
