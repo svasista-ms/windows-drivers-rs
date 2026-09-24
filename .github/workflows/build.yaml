@@ -59,7 +59,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
-      - name: Verify WinGet Installation
+      - name: Install WinGet
         uses: ./.github/actions/install-winget
 
       - name: Install LLVM ${{ matrix.llvm }}

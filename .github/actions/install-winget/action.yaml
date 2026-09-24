@@ -1,55 +1,53 @@
-name: Verify WinGet Installation
-description: Use existing WinGet components and install the CLI or PowerShell module only when missing, without version pins or setup retries.
+name: Install WinGet
+description: Install the latest WinGet CLI and install the PowerShell module if missing.
 runs:
   using: composite
   steps:
-    - name: Verify WinGet Installation
+    - name: Install WinGet
       env:
         GH_TOKEN: ${{ github.token }}
       shell: pwsh
       run: |
         Set-StrictMode -Version Latest
 
-        if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-          $repo = 'microsoft/winget-cli'
-          $downloadDir = Join-Path $env:RUNNER_TEMP "winget-install-$([guid]::NewGuid())"
-          New-Item -ItemType Directory -Path $downloadDir -Force | Out-Null
+        $repo = 'microsoft/winget-cli'
+        $downloadDir = Join-Path $env:RUNNER_TEMP "winget-install-$([guid]::NewGuid())"
+        New-Item -ItemType Directory -Path $downloadDir -Force | Out-Null
 
-          $releaseTag = gh release view --repo $repo --json tagName --jq '.tagName'
-          if ($LASTEXITCODE -ne 0) { throw "Failed to query release tag from $repo" }
+        $releaseTag = gh release view --repo $repo --json tagName --jq '.tagName'
+        if ($LASTEXITCODE -ne 0) { throw "Failed to query release tag from $repo" }
 
-          gh release download $releaseTag --repo $repo --pattern '*.msixbundle' --dir $downloadDir
-          if ($LASTEXITCODE -ne 0) { throw "Failed to download msixbundle from $repo" }
-          gh release download $releaseTag --repo $repo --pattern 'DesktopAppInstaller_Dependencies.zip' --dir $downloadDir
-          if ($LASTEXITCODE -ne 0) { throw "Failed to download DesktopAppInstaller_Dependencies.zip from $repo" }
-          Write-Host "Installing missing WinGet CLI from release: $releaseTag"
+        gh release download $releaseTag --repo $repo --pattern '*.msixbundle' --dir $downloadDir
+        if ($LASTEXITCODE -ne 0) { throw "Failed to download msixbundle from $repo" }
+        gh release download $releaseTag --repo $repo --pattern 'DesktopAppInstaller_Dependencies.zip' --dir $downloadDir
+        if ($LASTEXITCODE -ne 0) { throw "Failed to download DesktopAppInstaller_Dependencies.zip from $repo" }
+        Write-Host "Installing latest WinGet CLI from release: $releaseTag"
 
-          $depsDir = Join-Path $downloadDir 'deps'
-          Expand-Archive -Path (Join-Path $downloadDir 'DesktopAppInstaller_Dependencies.zip') -DestinationPath $depsDir -Force
-          $arch = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture) {
-            ([System.Runtime.InteropServices.Architecture]::X64)   { 'x64' }
-            ([System.Runtime.InteropServices.Architecture]::X86)   { 'x86' }
-            ([System.Runtime.InteropServices.Architecture]::Arm64) { 'arm64' }
-            default { throw 'Unsupported architecture for WinGet dependencies.' }
-          }
-          Write-Host "Detected architecture: $arch"
-
-          $depPackages = Get-ChildItem -Path $depsDir -Recurse -Include '*.appx', '*.msix' | Where-Object {
-            $_.FullName -match "[\\/]$arch[\\/]"
-          }
-          foreach ($pkg in $depPackages) {
-            try {
-              Add-AppxPackage -Path $pkg.FullName -ForceApplicationShutdown -ErrorAction Stop
-            } catch {
-              if ($_.Exception.Message -notmatch '0x80073D06') { throw }
-              Write-Host "Keeping newer installed dependency: $($pkg.Name)"
-            }
-          }
-
-          $bundle = Get-ChildItem -Path $downloadDir -Filter '*.msixbundle' | Select-Object -First 1
-          if (-not $bundle) { throw 'No msixbundle found in downloaded release assets.' }
-          Add-AppxPackage -Path $bundle.FullName -ForceApplicationShutdown -ErrorAction Stop
+        $depsDir = Join-Path $downloadDir 'deps'
+        Expand-Archive -Path (Join-Path $downloadDir 'DesktopAppInstaller_Dependencies.zip') -DestinationPath $depsDir -Force
+        $arch = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture) {
+          ([System.Runtime.InteropServices.Architecture]::X64)   { 'x64' }
+          ([System.Runtime.InteropServices.Architecture]::X86)   { 'x86' }
+          ([System.Runtime.InteropServices.Architecture]::Arm64) { 'arm64' }
+          default { throw 'Unsupported architecture for WinGet dependencies.' }
         }
+        Write-Host "Detected architecture: $arch"
+
+        $depPackages = Get-ChildItem -Path $depsDir -Recurse -Include '*.appx', '*.msix' | Where-Object {
+          $_.FullName -match "[\\/]$arch[\\/]"
+        }
+        foreach ($pkg in $depPackages) {
+          try {
+            Add-AppxPackage -Path $pkg.FullName -ForceApplicationShutdown -ErrorAction Stop
+          } catch {
+            if ($_.Exception.Message -notmatch '0x80073D06') { throw }
+            Write-Host "Keeping newer installed dependency: $($pkg.Name)"
+          }
+        }
+
+        $bundle = Get-ChildItem -Path $downloadDir -Filter '*.msixbundle' | Select-Object -First 1
+        if (-not $bundle) { throw 'No msixbundle found in downloaded release assets.' }
+        Add-AppxPackage -Path $bundle.FullName -ForceApplicationShutdown -ErrorAction Stop
         $cliVersion = winget --version
         if ($LASTEXITCODE -ne 0) {
           throw "WinGet CLI failed with exit code $LASTEXITCODE."
