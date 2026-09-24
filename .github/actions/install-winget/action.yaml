@@ -1,5 +1,5 @@
 name: Verify WinGet Installation
-description: Check the runner-provided WinGet CLI and Microsoft.WinGet.Client PowerShell module without modifying them.
+description: Verify the runner-provided WinGet CLI and install Microsoft.WinGet.Client only if missing, without pinning its version.
 runs:
   using: composite
   steps:
@@ -9,7 +9,7 @@ runs:
         Set-StrictMode -Version Latest
 
         if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-          throw 'The runner does not provide WinGet CLI on PATH. Runner-only setup does not install missing components.'
+          throw 'The runner does not provide WinGet CLI on PATH. This action does not install the CLI.'
         }
         $cliVersion = winget --version
         if ($LASTEXITCODE -ne 0) {
@@ -18,8 +18,12 @@ runs:
         Write-Host "Runner-provided WinGet CLI version: $cliVersion"
 
         if (-not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
-          throw 'The runner does not provide Microsoft.WinGet.Client. Runner-only setup does not install missing components.'
+          if (-not (Get-PSResourceRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+            Register-PSResourceRepository -PSGallery -Trusted -ErrorAction Stop
+          }
+          Write-Host 'Installing missing Microsoft.WinGet.Client module from PSGallery.'
+          Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -TrustRepository -Quiet -ErrorAction Stop
         }
         Import-Module Microsoft.WinGet.Client -Force -ErrorAction Stop
         $moduleVersion = (Get-Module -Name Microsoft.WinGet.Client).Version
-        Write-Host "Runner-provided Microsoft.WinGet.Client version: $moduleVersion"
+        Write-Host "Loaded Microsoft.WinGet.Client version: $moduleVersion"
