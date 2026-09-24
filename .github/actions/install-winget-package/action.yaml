@@ -55,33 +55,10 @@ runs:
                   Write-Host "Override arguments: $overrideArgs"
               }
 
-              # Retry only the transient RPC/COM startup failures.
-              $transientWinGetErrorPattern = '0x800706BA|RPC server is unavailable|Failed to create instance'
-
-              function Get-WinGetPackageWithRetry {
-                  param(
-                      [string]$PackageId,
-                      [int]$MaxAttempts = 6,
-                      [int]$DelaySeconds = 10
-                  )
-
-                  for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
-                      try {
-                          return Get-WinGetPackage -Id $PackageId -Source winget -MatchOption Equals -ErrorAction Stop
-                      } catch {
-                          if ($attempt -eq $MaxAttempts -or $_.Exception.Message -notmatch $transientWinGetErrorPattern) {
-                              throw
-                          }
-                          Write-Host "Get-WinGetPackage failed (attempt $attempt of $MaxAttempts): $($_.Exception.Message). Retrying in $DelaySeconds seconds..."
-                          Start-Sleep -Seconds $DelaySeconds
-                      }
-                  }
-              }
-
               # Check if package is already installed and skip if appropriate
               $shouldInstall = $true
               if ($skipIfInstalled) {
-                  $existingPackage = Get-WinGetPackageWithRetry -PackageId $packageId
+                  $existingPackage = Get-WinGetPackage -Id $packageId -Source winget -MatchOption Equals
                   if ($existingPackage) {
                       $installedVersion = $existingPackage.InstalledVersion
                       Write-Host "$packageId is already installed. Installed version: $installedVersion"
@@ -157,8 +134,8 @@ runs:
                   try {
                       $elapsedSeconds = [math]::Round(((Get-Date) - $verificationStartTime).TotalSeconds, 1)
                       Write-Host "Verification attempt at $elapsedSeconds seconds..."
-                      $verifyPackage = Get-WinGetPackageWithRetry -PackageId $packageId -MaxAttempts 1
-
+                      $verifyPackage = Get-WinGetPackage -Id $packageId -Source winget -MatchOption Equals
+                      
                       if ($verifyPackage) {
                           Write-Host "✅ Final verification: $packageId is installed with version: $($verifyPackage.InstalledVersion)"
                           $packageVerified = $true
