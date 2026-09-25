@@ -59,8 +59,11 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
-      - name: Install WinGet
+      - name: Install Winget
         uses: ./.github/actions/install-winget
+        with:
+          # windows-11-arm runner image does not include winget-cli (see https://github.com/actions/partner-runner-images/issues/95).
+          force-cli-install: ${{ matrix.runner.name == 'windows-11-arm' && 'true' || 'false' }}
 
       - name: Install LLVM ${{ matrix.llvm }}
         uses: ./.github/actions/install-llvm

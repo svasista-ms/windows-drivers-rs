@@ -1,9 +1,45 @@
-name: Install WinGet
-description: Install the latest WinGet CLI and install the PowerShell module if missing.
+name: Install Winget
+description: Install the Microsoft.WinGet.Client module from PSGallery and optionally force-install the matching WinGet CLI for images where it is absent.
+inputs:
+  force-cli-install:
+    description: Set to `true` to force install the latest WinGet CLI (only accepts `true` or `false`). Useful on images where WinGet may be absent (e.g. Windows ARM64 partner images).
+    required: false
+    default: 'false'
 runs:
   using: composite
   steps:
-    - name: Install WinGet
+    - name: Normalize inputs
+      id: normalize
+      shell: pwsh
+      run: |
+        $raw = "${{ inputs.force-cli-install }}"
+
+        $normalizedValue = $raw.Trim().ToLowerInvariant()
+
+        switch ($normalizedValue) {
+          'true' {
+            $normalized = 'true'
+            break
+          }
+          'false' {
+            $normalized = 'false'
+            break
+          }
+          default {
+            Write-Error "Invalid force-cli-install value '$raw'. Acceptable values: true or false."
+            exit 1
+          }
+        }
+
+        $outputLine = "force-cli-install=$normalized"
+        [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, "$outputLine`n", [System.Text.Encoding]::UTF8)
+
+    # Some hosted images (e.g. https://github.com/actions/partner-runner-images/issues/95) do not ship winget-cli.
+    # Repair-WinGetPackageManager uses unauthenticated Octokit calls that hit GitHub API rate limits in CI
+    # (https://github.com/microsoft/winget-cli/issues/5949).
+    # Instead, use the pre-installed `gh` CLI (authenticated via GH_TOKEN) to download release assets directly.
+    - name: Install WinGet CLI from GitHub release
+      if: ${{ steps.normalize.outputs.force-cli-install == 'true' }}
       env:
         GH_TOKEN: ${{ github.token }}
       shell: pwsh
@@ -11,60 +47,99 @@ runs:
         Set-StrictMode -Version Latest
 
         $repo = 'microsoft/winget-cli'
-        $downloadDir = Join-Path $env:RUNNER_TEMP "winget-install-$([guid]::NewGuid())"
+        $downloadDir = Join-Path $env:TEMP 'winget-install'
         New-Item -ItemType Directory -Path $downloadDir -Force | Out-Null
 
+        # Resolve the latest release tag once to avoid a race between downloads
         $releaseTag = gh release view --repo $repo --json tagName --jq '.tagName'
         if ($LASTEXITCODE -ne 0) { throw "Failed to query release tag from $repo" }
 
-        gh release download $releaseTag --repo $repo --pattern '*.msixbundle' --dir $downloadDir
+        # Download the release assets (msixbundle + dependency packages) using authenticated gh CLI
+        gh release download $releaseTag --repo $repo --pattern '*.msixbundle' --dir $downloadDir --clobber
         if ($LASTEXITCODE -ne 0) { throw "Failed to download msixbundle from $repo" }
-        gh release download $releaseTag --repo $repo --pattern 'DesktopAppInstaller_Dependencies.zip' --dir $downloadDir
+        gh release download $releaseTag --repo $repo --pattern 'DesktopAppInstaller_Dependencies.zip' --dir $downloadDir --clobber
         if ($LASTEXITCODE -ne 0) { throw "Failed to download DesktopAppInstaller_Dependencies.zip from $repo" }
-        Write-Host "Installing latest WinGet CLI from release: $releaseTag"
+        Write-Host "Installing WinGet CLI from release: $releaseTag"
 
-        $depsDir = Join-Path $downloadDir 'deps'
-        Expand-Archive -Path (Join-Path $downloadDir 'DesktopAppInstaller_Dependencies.zip') -DestinationPath $depsDir -Force
-        $arch = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture) {
-          ([System.Runtime.InteropServices.Architecture]::X64)   { 'x64' }
-          ([System.Runtime.InteropServices.Architecture]::X86)   { 'x86' }
-          ([System.Runtime.InteropServices.Architecture]::Arm64) { 'arm64' }
-          default { throw 'Unsupported architecture for WinGet dependencies.' }
-        }
-        Write-Host "Detected architecture: $arch"
+        # Install framework dependencies (VCLibs, WinUI/WindowsAppRuntime)
+        $depsZip = Join-Path $downloadDir 'DesktopAppInstaller_Dependencies.zip'
+        if (Test-Path $depsZip) {
+          $depsDir = Join-Path $downloadDir 'deps'
+          Expand-Archive -Path $depsZip -DestinationPath $depsDir -Force
 
-        $depPackages = Get-ChildItem -Path $depsDir -Recurse -Include '*.appx', '*.msix' | Where-Object {
-          $_.FullName -match "[\\/]$arch[\\/]"
-        }
-        foreach ($pkg in $depPackages) {
-          try {
-            Add-AppxPackage -Path $pkg.FullName -ForceApplicationShutdown -ErrorAction Stop
-          } catch {
-            if ($_.Exception.Message -notmatch '0x80073D06') { throw }
-            Write-Host "Keeping newer installed dependency: $($pkg.Name)"
+          # Determine architecture for dependency selection
+          $osArch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+          $arch = switch ($osArch) {
+            ([System.Runtime.InteropServices.Architecture]::X64)   { 'x64' }
+            ([System.Runtime.InteropServices.Architecture]::X86)   { 'x86' }
+            ([System.Runtime.InteropServices.Architecture]::Arm64) { 'arm64' }
+            default { throw "Unsupported architecture: $osArch" }
+          }
+          Write-Host "Detected architecture: $arch"
+
+          # Install all dependency packages for the detected architecture
+          $depsInstalled = 0
+          $depsFailed = 0
+          $depPackages = Get-ChildItem -Path $depsDir -Recurse -Include '*.appx', '*.msix' | Where-Object {
+            $_.FullName -match "[\\/]$arch[\\/]"
+          }
+          foreach ($pkg in $depPackages) {
+            try {
+              Add-AppxPackage -Path $pkg.FullName -ForceApplicationShutdown -ForceUpdateFromAnyVersion -ErrorAction Stop
+              Write-Host "Installed dependency: $($pkg.Name)"
+              $depsInstalled++
+            } catch {
+              Write-Host "Dependency $($pkg.Name): $($_.Exception.Message)"
+              $depsFailed++
+            }
+          }
+          if (($depsInstalled + $depsFailed) -eq 0) {
+            Write-Warning "No dependency packages found for architecture '$arch' in '$depsDir'."
+          } else {
+            Write-Host "Dependencies: $depsInstalled installed, $depsFailed skipped"
           }
         }
 
+        # Install the WinGet CLI msixbundle
         $bundle = Get-ChildItem -Path $downloadDir -Filter '*.msixbundle' | Select-Object -First 1
         if (-not $bundle) { throw 'No msixbundle found in downloaded release assets.' }
-        Add-AppxPackage -Path $bundle.FullName -ForceApplicationShutdown -ForceUpdateFromAnyVersion -ErrorAction Stop
-        $cliVersion = winget --version
-        if ($LASTEXITCODE -ne 0) {
-          throw "WinGet CLI failed with exit code $LASTEXITCODE."
-        }
-        $cliVersion = $cliVersion.Trim() -replace '^v', ''
-        Write-Host "WinGet CLI version: $cliVersion"
+        Write-Host "Installing: $($bundle.Name)"
+        Add-AppxPackage -Path $bundle.FullName -ForceApplicationShutdown -ForceUpdateFromAnyVersion
 
-        if (-not (Get-Module -ListAvailable -Name Microsoft.WinGet.Client)) {
-          if (-not (Get-PSResourceRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
-            Register-PSResourceRepository -PSGallery -Trusted -ErrorAction Stop
+    - name: Install matching WinGet PowerShell module
+      shell: pwsh
+      run: |
+        Set-StrictMode -Version Latest
+
+        # Use Install-PSResource (PSResourceGet, built into PowerShell 7.4+) instead of the
+        # legacy Install-Module. PSResourceGet has its own repository system that is independent
+        # of the old PowerShellGet/NuGet pipeline, which avoids transient PSGallery registration
+        # failures on freshly provisioned runners.
+        # See https://github.com/actions/runner-images/issues/13758
+        if (-not (Get-PSResourceRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+          Register-PSResourceRepository -PSGallery -Trusted
+        }
+
+        $cliVersion = (winget --version).Trim() -replace '^v', ''
+        $cliMajor = ($cliVersion -split '\.')[0]
+        Write-Host "WinGet CLI version: $cliVersion (major: $cliMajor)"
+
+        # Try exact match first, then best matching major version, then latest
+        $found = Find-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -Version $cliVersion -ErrorAction SilentlyContinue
+        if ($found) {
+          Write-Host "Installing exact matching module version: $cliVersion"
+          Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -Version $cliVersion -TrustRepository -Quiet
+        } else {
+          $allVersions = Find-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -Version "[$cliMajor.0.0, $([int]$cliMajor + 1).0.0)" -ErrorAction SilentlyContinue
+          if ($allVersions) {
+            $best = ($allVersions | Sort-Object Version -Descending | Select-Object -First 1).Version
+            Write-Host "Exact match not found. Installing latest module with matching major version: $best"
+            Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -Version $best -TrustRepository -Quiet
+          } else {
+            Write-Warning "No module with major version $cliMajor found on PSGallery. Installing latest version."
+            Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -TrustRepository -Quiet
           }
-          Write-Host 'Installing missing Microsoft.WinGet.Client module from PSGallery.'
-          Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -TrustRepository -Quiet -ErrorAction Stop
         }
-        Import-Module Microsoft.WinGet.Client -Force -ErrorAction Stop
-        $moduleVersion = (Get-Module -Name Microsoft.WinGet.Client).Version
-        Write-Host "Loaded Microsoft.WinGet.Client version: $moduleVersion"
-        if ($moduleVersion.ToString() -ne $cliVersion) {
-          Write-Warning "Microsoft.WinGet.Client version $moduleVersion differs from WinGet CLI version $cliVersion. Continuing with the loaded module."
-        }
+
+        $moduleVersion = (Get-InstalledPSResource -Name Microsoft.WinGet.Client | Sort-Object Version -Descending | Select-Object -First 1).Version.ToString()
+        Write-Host "Installed module version: $moduleVersion"
