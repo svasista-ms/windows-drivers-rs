@@ -1,0 +1,120 @@
+name: WinGet Module Import Experiment
+
+on:
+  push:
+    branches:
+      - experiment/winget-module-import
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    if: github.repository == 'svasista-ms/windows-drivers-rs'
+    name: ${{ matrix.runner }} / ${{ matrix.import-mode }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-2025, windows-11-arm]
+        import-mode: [unversioned, required-version]
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Inspect untouched runner
+        run: |
+          Set-StrictMode -Version Latest
+          $modules = @(Get-Module Microsoft.WinGet.Client -ListAvailable)
+          $inventory = if ($modules.Count -eq 0) {
+            'No Microsoft.WinGet.Client module is discoverable.'
+          } else {
+            $modules | Sort-Object Version -Descending |
+              Format-Table Name, Version, Path -AutoSize | Out-String -Width 4096
+          }
+          $cli = if (Get-Command winget -ErrorAction SilentlyContinue) {
+            winget --version
+            if ($LASTEXITCODE -ne 0) { throw 'winget --version failed.' }
+          } else {
+            'Not installed'
+          }
+          $report = @(
+            '## Before setup'
+            "Image: $env:ImageOS / $env:ImageVersion"
+            "PowerShell: $($PSVersionTable.PSVersion)"
+            "Architecture: $([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)"
+            "CLI: $cli"
+            "Discoverable module count: $($modules.Count)"
+            '```text'
+            $inventory
+            '```'
+          ) -join "`n"
+          Write-Host $report
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value $report
+          Write-Host "PSModulePath: $env:PSModulePath"
+
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Run existing WinGet setup
+        uses: ./.github/actions/install-winget
+        with:
+          force-cli-install: ${{ matrix.runner == 'windows-11-arm' && 'true' || 'false' }}
+
+      - name: Inspect installed modules and test import
+        env:
+          IMPORT_MODE: ${{ matrix.import-mode }}
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:WINGET_MODULE_VERSION)) {
+            throw 'Setup did not publish the selected module version.'
+          }
+          $selected = [version]$env:WINGET_MODULE_VERSION
+          $modules = @(Get-Module Microsoft.WinGet.Client -ListAvailable)
+          $inventory = $modules | Sort-Object Version -Descending |
+            Format-Table Name, Version, Path -AutoSize | Out-String -Width 4096
+          $cli = winget --version
+          if ($LASTEXITCODE -ne 0) { throw 'winget --version failed.' }
+          $report = @(
+            '## After setup'
+            "CLI: $cli"
+            "Setup selected: $selected"
+            "Import mode: $env:IMPORT_MODE"
+            "Discoverable module count: $($modules.Count)"
+            '```text'
+            $inventory
+            '```'
+          ) -join "`n"
+          Write-Host $report
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value $report
+
+          try {
+            if ($env:IMPORT_MODE -eq 'unversioned') {
+              Remove-Item Env:WINGET_MODULE_VERSION
+              Import-Module Microsoft.WinGet.Client -Force -ErrorAction Stop
+            } else {
+              Import-Module Microsoft.WinGet.Client -RequiredVersion $selected -Force -ErrorAction Stop
+            }
+            $loaded = @(Get-Module Microsoft.WinGet.Client)
+            $loaded | Format-Table Name, Version, Path -AutoSize | Out-String -Width 4096 | Write-Host
+            if ($loaded.Count -ne 1) { throw "Expected one loaded module; found $($loaded.Count)." }
+            $matches = $loaded[0].Version -eq $selected
+            $result = "Loaded: $($loaded[0].Version); matches setup: $matches; path: $($loaded[0].Path)"
+            Write-Host $result
+            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value $result
+            $packages = @(Get-WinGetPackage -ErrorAction Stop)
+            $result = "Get-WinGetPackage succeeded ($($packages.Count) packages)."
+            Write-Host $result
+            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value $result
+            if (-not $matches) { throw 'Import did not load the version selected by setup.' }
+          } catch {
+            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "FAILED: $($_.Exception.Message)"
+            throw
+          }
