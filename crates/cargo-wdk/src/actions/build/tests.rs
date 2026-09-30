@@ -2159,7 +2159,6 @@ impl TestBuildAction {
         override_output: Option<Output>,
     ) -> Self {
         // cargo build on the package
-        let expected_cargo_command: &'static str = "cargo";
         let manifest_path = cwd
             .join("Cargo.toml")
             .to_string_lossy()
@@ -2197,18 +2196,12 @@ impl TestBuildAction {
             stderr: vec![],
         });
         self.mock_run_command
-            .expect_run()
-            .withf(
-                move |command: &str,
-                      args: &[&str],
-                      _env_vars: &Option<&HashMap<&str, &str>>,
-                      _working_dir: &Option<&Path>|
-                      -> bool {
-                    command == expected_cargo_command && args == expected_cargo_build_args
-                },
-            )
+            .expect_run_cargo()
+            .withf(move |args: &[&str], _working_dir: &Option<&Path>| -> bool {
+                args == expected_cargo_build_args
+            })
             .once()
-            .returning(move |_, _, _, _| Ok(expected_output.clone()));
+            .returning(move |_, _| Ok(expected_output.clone()));
         self
     }
 
@@ -2236,19 +2229,13 @@ impl TestBuildAction {
         expected_args.push("cfg".to_string());
         let expected_args_for_err = expected_args.clone();
         self.mock_run_command
-            .expect_run()
-            .withf(
-                move |command: &str,
-                      args: &[&str],
-                      _env_vars: &Option<&HashMap<&str, &str>>,
-                      working_dir: &Option<&Path>| {
-                    command == "cargo"
-                        && args == expected_args
-                        && working_dir.is_some_and(|d| d == expected_working_dir.as_path())
-                },
-            )
+            .expect_run_cargo()
+            .withf(move |args: &[&str], working_dir: &Option<&Path>| {
+                args == expected_args
+                    && working_dir.is_some_and(|d| d == expected_working_dir.as_path())
+            })
             .once()
-            .returning(move |_, _, _, _| match override_output.clone() {
+            .returning(move |_, _| match override_output.clone() {
                 Some(output) => {
                     if output.status.code() == Some(0) {
                         Ok(Output {
@@ -3557,7 +3544,6 @@ mod get_target_dir_from_output {
 
 mod get_target_arch_from_cargo_rustc {
     use std::{
-        collections::HashMap,
         path::{Path, PathBuf},
         process::{ExitStatus, Output},
     };
@@ -3696,20 +3682,12 @@ mod get_target_arch_from_cargo_rustc {
         expected_args.extend(["--", "--print", "cfg"].map(String::from));
         test_build_action
             .mock_run_command
-            .expect_run()
-            .withf(
-                move |command: &str,
-                      args: &[&str],
-                      _env_vars: &Option<&HashMap<&str, &str>>,
-                      working_dir: &Option<&Path>|
-                      -> bool {
-                    command == "cargo"
-                        && args == expected_args
-                        && matches!(working_dir, Some(dir) if *dir == cwd.as_path())
-                },
-            )
+            .expect_run_cargo()
+            .withf(move |args: &[&str], working_dir: &Option<&Path>| -> bool {
+                args == expected_args && matches!(working_dir, Some(dir) if *dir == cwd.as_path())
+            })
             .once()
-            .returning(move |_, _, _, _| {
+            .returning(move |_, _| {
                 Ok(Output {
                     status: ExitStatus::default(),
                     stdout: stdout.clone(),

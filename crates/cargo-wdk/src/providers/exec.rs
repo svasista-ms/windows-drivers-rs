@@ -14,6 +14,7 @@
 
 use std::{
     collections::HashMap,
+    ffi::OsStr,
     path::Path,
     process::{Command, Output, Stdio},
 };
@@ -22,7 +23,7 @@ use anyhow::Result;
 use mockall::automock;
 use tracing::debug;
 
-use super::error::CommandError;
+use super::{cargo_path, error::CommandError};
 
 /// Provides limited access to `std::process::Command` methods
 #[derive(Debug, Default)]
@@ -30,6 +31,22 @@ pub struct CommandExec {}
 
 #[automock]
 impl CommandExec {
+    /// Runs the Cargo executable supplied by the invoking environment.
+    ///
+    /// # Errors
+    /// Returns an error if `CARGO` is missing or empty, or if execution fails.
+    #[allow(clippy::extra_unused_lifetimes)]
+    pub fn run_cargo<'a>(
+        &self,
+        args: &'a [&'a str],
+        working_dir: Option<&'a Path>,
+    ) -> Result<Output, CommandError> {
+        let cargo = cargo_path().map_err(|error| {
+            CommandError::from_io_error("cargo", args, std::io::Error::other(error))
+        })?;
+        run_command(cargo.as_os_str(), args, &[], None, working_dir)
+    }
+
     // The `'a` lifetime is required by mockall's `#[automock]` to generate the
     // mock impl
     #[allow(clippy::extra_unused_lifetimes)]
@@ -61,56 +78,77 @@ impl CommandExec {
         env_vars: Option<&'a HashMap<&'a str, &'a str>>,
         working_dir: Option<&'a Path>,
     ) -> Result<Output, CommandError> {
-        assert!(
-            redaction_indices.iter().all(|&i| i < args.len()),
-            "redaction index out of bounds for {} argument(s): {redaction_indices:?}",
-            args.len()
-        );
-        let log_args: Vec<&str> = args
-            .iter()
-            .enumerate()
-            .map(|(i, arg)| {
-                if redaction_indices.contains(&i) {
-                    "<hidden>"
-                } else {
-                    *arg
-                }
-            })
-            .collect();
-        debug!("Running: {} {:?}", command, log_args);
-
-        let mut cmd = Command::new(command);
-        cmd.args(args);
-
-        if let Some(env) = env_vars {
-            for (key, value) in env {
-                cmd.env(key, value);
-            }
-        }
-
-        if let Some(working_dir) = working_dir {
-            cmd.current_dir(working_dir);
-        }
-
-        let output = cmd
-            .stdout(Stdio::piped())
-            .spawn()
-            .and_then(std::process::Child::wait_with_output)
-            .map_err(|e| CommandError::from_io_error(command, &log_args, e))?;
-
-        if !output.status.success() {
-            return Err(CommandError::from_output(command, &log_args, &output));
-        }
-
-        debug!(
-            "COMMAND: {}\n ARGS:{:?}\n OUTPUT: {}\n",
-            command,
-            log_args,
-            String::from_utf8_lossy(&output.stdout)
-        );
-
-        Ok(output)
+        run_command(
+            OsStr::new(command),
+            args,
+            redaction_indices,
+            env_vars,
+            working_dir,
+        )
     }
+}
+
+fn run_command(
+    command: &OsStr,
+    args: &[&str],
+    redaction_indices: &[usize],
+    env_vars: Option<&HashMap<&str, &str>>,
+    working_dir: Option<&Path>,
+) -> Result<Output, CommandError> {
+    assert!(
+        redaction_indices.iter().all(|&i| i < args.len()),
+        "redaction index out of bounds for {} argument(s): {redaction_indices:?}",
+        args.len()
+    );
+    let log_args: Vec<&str> = args
+        .iter()
+        .enumerate()
+        .map(|(i, arg)| {
+            if redaction_indices.contains(&i) {
+                "<hidden>"
+            } else {
+                *arg
+            }
+        })
+        .collect();
+    let command_display = command.to_string_lossy();
+    debug!("Running: {} {:?}", command_display, log_args);
+
+    let mut cmd = Command::new(command);
+    cmd.args(args);
+
+    if let Some(env) = env_vars {
+        for (key, value) in env {
+            cmd.env(key, value);
+        }
+    }
+
+    if let Some(working_dir) = working_dir {
+        cmd.current_dir(working_dir);
+    }
+
+    let output = cmd
+        .stdout(Stdio::piped())
+        .spawn()
+        .and_then(std::process::Child::wait_with_output)
+        .map_err(|e| CommandError::from_io_error(&command_display, &log_args, e))?;
+
+    if !output.status.success() {
+        return Err(CommandError::from_output(
+            &command_display,
+            &log_args,
+            &output,
+        ));
+    }
+
+    debug!(
+        "COMMAND: {}\n ARGS:{:?}\n OUTPUT: {}\n",
+        command_display,
+        log_args,
+        String::from_utf8_lossy(&output.stdout)
+    );
+
+    Ok(output)
 }
 
 #[cfg(test)]

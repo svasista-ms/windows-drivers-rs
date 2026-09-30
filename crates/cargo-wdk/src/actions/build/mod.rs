@@ -585,9 +585,7 @@ impl<'a> BuildAction<'a> {
         let feature_args = features_to_cargo_args(self.features);
         args.extend(feature_args.iter().map(String::as_str));
         args.extend(["--", "--print", "cfg"]);
-        let output = self
-            .command_exec
-            .run("cargo", &args, None, Some(working_dir))?;
+        let output = self.command_exec.run_cargo(&args, Some(working_dir))?;
         let stdout = std::str::from_utf8(&output.stdout)
             .map_err(|_| BuildActionError::CannotDetectTargetArch)?;
         let arch = stdout.lines().find_map(|line| {

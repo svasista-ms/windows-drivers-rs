@@ -85,10 +85,16 @@ fn kmdf_driver_builds_successfully_with_locked_flag() {
 
     // `--locked` must be forwarded to the `cargo rustc` (target-arch probe) and
     // `cargo build` invocations.
+    let cargo = env::var_os("CARGO").expect("run integration tests through cargo test");
     for subcommand in ["rustc", "build"] {
         let invocation = stderr
             .lines()
-            .find(|line| line.contains(&format!("Running: cargo [\"{subcommand}\"")))
+            .find(|line| {
+                line.contains(&format!(
+                    "Running: {} [\"{subcommand}\"",
+                    cargo.to_string_lossy()
+                ))
+            })
             .unwrap_or_else(|| {
                 panic!("no `cargo {subcommand}` invocation found in stderr:\n{stderr}")
             });

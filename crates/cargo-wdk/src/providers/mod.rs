@@ -14,6 +14,20 @@ pub mod fs;
 pub mod metadata;
 pub mod wdk_build;
 
+fn cargo_path() -> anyhow::Result<std::path::PathBuf> {
+    cargo_path_from_env(std::env::var_os("CARGO"))
+}
+
+fn cargo_path_from_env(value: Option<std::ffi::OsString>) -> anyhow::Result<std::path::PathBuf> {
+    match value {
+        None => Err(anyhow::anyhow!(
+            "CARGO is not set; invoke through `cargo wdk ...`"
+        )),
+        Some(path) if path.is_empty() => Err(anyhow::anyhow!("CARGO is empty")),
+        Some(path) => Ok(path.into()),
+    }
+}
+
 pub mod error {
     use std::{io, path::PathBuf, process::Output};
 
@@ -75,5 +89,59 @@ pub mod error {
         ReadDirError(PathBuf, #[source] io::Error),
         #[error("Failed to read directory entries for {0}")]
         ReadDirEntriesError(PathBuf, #[source] io::Error),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{ffi::OsString, os::windows::ffi::OsStringExt, path::PathBuf};
+
+    use super::cargo_path_from_env;
+
+    #[test]
+    fn missing_cargo_is_an_error() {
+        assert_eq!(
+            cargo_path_from_env(None).unwrap_err().to_string(),
+            "CARGO is not set; invoke through `cargo wdk ...`"
+        );
+    }
+
+    #[test]
+    fn empty_cargo_is_an_error() {
+        assert_eq!(
+            cargo_path_from_env(Some(OsString::new()))
+                .unwrap_err()
+                .to_string(),
+            "CARGO is empty"
+        );
+    }
+
+    #[test]
+    fn cargo_path_is_preserved() {
+        let path = OsString::from(r"C:\selected toolchain\bin\cargo.exe");
+        assert_eq!(
+            cargo_path_from_env(Some(path.clone())).unwrap(),
+            PathBuf::from(path)
+        );
+    }
+
+    #[test]
+    fn nonexistent_cargo_path_is_not_replaced() {
+        let dir = assert_fs::TempDir::new().unwrap();
+        let path = dir.join("missing-cargo.exe");
+        assert!(!path.exists());
+        assert_eq!(
+            cargo_path_from_env(Some(path.clone().into_os_string())).unwrap(),
+            path
+        );
+    }
+
+    #[test]
+    fn non_unicode_cargo_path_is_preserved() {
+        let path = OsString::from_wide(&[0x0043, 0x003A, 0x005C, 0xD800]);
+        assert_eq!(
+            cargo_path_from_env(Some(path.clone())).unwrap(),
+            PathBuf::from(path)
+        );
     }
 }

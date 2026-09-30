@@ -261,6 +261,11 @@ pub fn create_cargo_wdk_cmd<P: AsRef<Path>>(
 
     sanitize_env_vars(&mut cmd);
 
+    cmd.env(
+        "CARGO",
+        env::var_os("CARGO").expect("CARGO is not set; run integration tests through `cargo test`"),
+    );
+
     if let Some(env_vars) = env_vars {
         for (key, value) in env_vars {
             match value {

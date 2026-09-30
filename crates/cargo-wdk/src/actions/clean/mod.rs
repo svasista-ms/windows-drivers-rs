@@ -161,7 +161,7 @@ impl<'a> CleanAction<'a> {
             args.push(flag);
         }
         self.command_exec
-            .run("cargo", &args, None, Some(working_dir))
+            .run_cargo(&args, Some(working_dir))
             .map_err(CleanActionError::CargoClean)?;
         info!("Cleaned project at {}", working_dir.display());
         Ok(())
@@ -228,11 +228,11 @@ mod tests {
     /// Sets up an expectation for `cargo clean` invoked at `dir`.
     fn mock_cargo_clean(exec: &mut CommandExec, dir: &Path, ok: bool) {
         let dir = dir.to_owned();
-        exec.expect_run()
-            .withf(move |cmd, args, _env, working_dir| {
-                cmd == "cargo" && args == ["clean"] && *working_dir == Some(dir.as_path())
+        exec.expect_run_cargo()
+            .withf(move |args, working_dir| {
+                args == ["clean"] && *working_dir == Some(dir.as_path())
             })
-            .returning(move |_, _, _, _| {
+            .returning(move |_, _| {
                 if ok {
                     Ok(ok_output())
                 } else {

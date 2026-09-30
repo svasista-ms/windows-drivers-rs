@@ -15,6 +15,8 @@ use std::path::Path;
 use clap_cargo::Features;
 use mockall::automock;
 
+use super::cargo_path;
+
 #[derive(Default)]
 pub struct Metadata {}
 
@@ -45,16 +47,20 @@ impl Metadata {
     ///
     /// # Errors
     ///
-    /// This function will return an error if the `cargo metadata` command fails
-    /// to execute or if the specified path is not a valid Cargo project.
+    /// This function will return an error if `CARGO` is missing or empty, if
+    /// the `cargo metadata` command fails to execute, or if the specified
+    /// path is not a valid Cargo project.
     pub fn get_cargo_metadata_at_path(
         &self,
         working_dir: &Path,
         other_options: Vec<String>,
         features: &Features,
     ) -> cargo_metadata::Result<cargo_metadata::Metadata> {
+        let cargo = cargo_path().map_err(std::io::Error::other)?;
         let mut cmd = cargo_metadata::MetadataCommand::new();
-        cmd.current_dir(working_dir).other_options(other_options);
+        cmd.cargo_path(&cargo)
+            .current_dir(working_dir)
+            .other_options(other_options);
         features.forward_metadata(&mut cmd);
         cmd.exec()
     }
