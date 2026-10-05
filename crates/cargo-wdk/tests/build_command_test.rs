@@ -476,7 +476,7 @@ mod signtool_args {
                 &project_path,
                 Some(&[
                     "--signtool-args",
-                    "/s WDRCustomTestStore /n WDRCustomTestCert /fd SHA256",
+                    "-s WDRCustomTestStore /n WDRCustomTestCert -fd SHA256",
                 ]),
                 None,
             );
