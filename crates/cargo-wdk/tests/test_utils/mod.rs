@@ -303,8 +303,8 @@ pub fn create_cargo_wdk_cmd<P: AsRef<Path>>(
 /// the child runs in a clean environment.
 ///
 /// In particular, this function removes:
-/// - All env vars starting with `CARGO` or `RUST` except `CARGO_HOME` and
-///   `RUSTUP_HOME`
+/// - All env vars starting with `CARGO` or `RUST` except `CARGO_HOME`,
+///   `RUSTUP_HOME`, and `RUSTUP_TOOLCHAIN`
 /// - Entries added to the "PATH" variable by cargo
 fn sanitize_env_vars(cmd: &mut Command) {
     const PATH_VAR: &str = "PATH";
@@ -313,11 +313,10 @@ fn sanitize_env_vars(cmd: &mut Command) {
     let vars_to_remove = env::vars().filter_map(|(var, _)| {
         let var_upper = var.to_uppercase();
         if (var_upper.starts_with("CARGO") || var_upper.starts_with("RUST"))
-            // Leaving these two in as removing them can cause
-            // issues with finding toolchains installed at 
-            // non-default locations
+            // Preserve toolchain selection and non-default installation roots.
             && var_upper != "CARGO_HOME"
             && var_upper != "RUSTUP_HOME"
+            && var_upper != "RUSTUP_TOOLCHAIN"
         {
             Some(var)
         } else {
@@ -351,4 +350,34 @@ fn sanitize_env_vars(cmd: &mut Command) {
     let new_value = env::join_paths(paths_to_keep).expect("unable to join PATH entries");
 
     cmd.env(PATH_VAR, new_value);
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{env, path::PathBuf, process::Command};
+
+    use super::sanitize_env_vars;
+
+    #[test]
+    fn sanitized_environment_preserves_selected_rustc() {
+        let cargo = PathBuf::from(env::var_os("CARGO").expect("run tests through cargo test"));
+        let rustc = cargo.with_file_name("rustc.exe");
+        let expected = Command::new(rustc).arg("-vV").output().unwrap();
+        assert!(expected.status.success(), "{expected:?}");
+
+        let mut command = Command::new("rustup");
+        command.args(["which", "rustc"]);
+        sanitize_env_vars(&mut command);
+        let resolved = command.output().unwrap();
+        assert!(resolved.status.success(), "{resolved:?}");
+        let rustc = String::from_utf8(resolved.stdout).unwrap();
+        let actual = Command::new(rustc.trim()).arg("-vV").output().unwrap();
+
+        assert!(actual.status.success(), "{actual:?}");
+        assert_eq!(
+            String::from_utf8(actual.stdout).unwrap(),
+            String::from_utf8(expected.stdout).unwrap(),
+            "sanitizing the environment must not change the selected compiler"
+        );
+    }
 }
