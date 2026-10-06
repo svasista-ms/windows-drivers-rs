@@ -6,11 +6,13 @@ use std::{io, path::PathBuf, string::FromUtf8Error};
 
 use thiserror::Error;
 
-use crate::providers::error::{CommandError, FileError};
+use crate::providers::error::{CargoPathError, CommandError, FileError};
 
 /// Errors for the build action layer
 #[derive(Error, Debug)]
 pub enum BuildActionError {
+    #[error(transparent)]
+    CargoPath(#[from] CargoPathError),
     #[error("Provided path is not absolute: {0}")]
     NotAbsolute(PathBuf, #[source] io::Error),
     #[error(transparent)]
@@ -46,6 +48,8 @@ pub enum BuildActionError {
 /// Errors for the low level build task layer
 #[derive(Error, Debug)]
 pub enum BuildTaskError {
+    #[error(transparent)]
+    CargoPath(#[from] CargoPathError),
     #[error("Empty manifest path found error")]
     EmptyManifestPath,
     #[error("Error running cargo build command")]

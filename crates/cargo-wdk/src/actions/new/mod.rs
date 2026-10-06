@@ -22,10 +22,7 @@ use tracing::{debug, info};
 
 #[double]
 use crate::providers::{exec::CommandExec, fs::Fs};
-use crate::{
-    providers::{cargo_path, error::CommandError},
-    trace,
-};
+use crate::{providers::cargo_path, trace};
 
 pub const KMDF_STR: &str = "kmdf";
 pub const UMDF_STR: &str = "umdf";
@@ -116,6 +113,8 @@ impl<'a> NewAction<'a> {
     ///
     /// # Errors
     ///
+    /// * `NewActionError::CargoPath` - If `CARGO` is missing, empty, or not
+    ///   valid Unicode.
     /// * `NewActionError::CargoNewCommand` - If there is an error running the
     ///   `cargo new` command.
     /// * `NewActionError::TemplateNotFound` - If a template file matching the
@@ -151,6 +150,8 @@ impl<'a> NewAction<'a> {
     ///
     /// # Errors
     ///
+    /// * `NewActionError::CargoPath` - If `CARGO` is missing, empty, or not
+    ///   valid Unicode.
     /// * `NewActionError::CargoNewCommand` - If there is an error running the
     ///   `cargo new` command.
     fn run_cargo_new(&self) -> Result<(), NewActionError> {
@@ -160,13 +161,7 @@ impl<'a> NewAction<'a> {
         if let Some(flag) = trace::get_cargo_verbose_flags(self.verbosity_level) {
             args.push(flag);
         }
-        let cargo = cargo_path().map_err(|error| {
-            NewActionError::CargoNewCommand(CommandError::from_io_error(
-                "cargo",
-                &args,
-                std::io::Error::other(error),
-            ))
-        })?;
+        let cargo = cargo_path()?;
         if let Err(e) = self.command_exec.run(&cargo, &args, None, None) {
             return Err(NewActionError::CargoNewCommand(e));
         }

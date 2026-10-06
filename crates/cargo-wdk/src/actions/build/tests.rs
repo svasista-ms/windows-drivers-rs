@@ -37,7 +37,7 @@ use crate::{
         error::BuildActionError,
         to_target_triple,
     },
-    providers::error::{CommandError, FileError},
+    providers::error::{CargoPathError, CommandError, FileError, MetadataError},
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1696,6 +1696,65 @@ pub fn given_a_workspace_only_with_non_driver_projects_when_cwd_is_workspace_mem
         verify_signature,
         sample_class,
         test_build_action,
+    );
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Metadata error tests
+////////////////////////////////////////////////////////////////////////////////
+#[test]
+fn given_invalid_cargo_configuration_when_getting_metadata_then_cargo_path_error_is_preserved() {
+    for error in [
+        CargoPathError::Missing,
+        CargoPathError::Empty,
+        CargoPathError::InvalidUnicode,
+    ] {
+        let message = error.to_string();
+        let cwd = PathBuf::from(r"C:\tmp");
+        let mut test_build_action = TestBuildAction::new(cwd.clone(), None, None, false);
+        test_build_action
+            .mock_metadata_provider
+            .expect_get_cargo_metadata_at_path()
+            .once()
+            .return_once(move |_, _, _| Err(MetadataError::CargoPath(error)));
+        test_build_action.mock_run_command.expect_run().never();
+        let action =
+            initialize_build_action(&cwd, None, None, false, false, &test_build_action).unwrap();
+
+        let error = action.get_cargo_metadata(&cwd).unwrap_err();
+
+        assert!(matches!(error, BuildActionError::CargoPath(_)));
+        assert_eq!(format!("{:#}", anyhow::Error::new(error)), message);
+    }
+}
+
+#[test]
+fn given_a_metadata_io_error_when_getting_metadata_then_cargo_metadata_error_is_preserved() {
+    let cwd = PathBuf::from(r"C:\tmp");
+    let mut test_build_action = TestBuildAction::new(cwd.clone(), None, None, false);
+    test_build_action
+        .mock_metadata_provider
+        .expect_get_cargo_metadata_at_path()
+        .once()
+        .return_once(|_, _, _| {
+            Err(cargo_metadata::Error::Io(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "selected Cargo executable is missing",
+            ))
+            .into())
+        });
+    let action =
+        initialize_build_action(&cwd, None, None, false, false, &test_build_action).unwrap();
+
+    let error = action.get_cargo_metadata(&cwd).unwrap_err();
+
+    assert!(matches!(
+        error,
+        BuildActionError::CargoMetadataParse(cargo_metadata::Error::Io(ref source))
+            if source.kind() == std::io::ErrorKind::NotFound
+    ));
+    assert!(
+        format!("{:#}", anyhow::Error::new(error)).contains("selected Cargo executable is missing")
     );
 }
 

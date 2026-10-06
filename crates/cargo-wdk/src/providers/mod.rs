@@ -14,28 +14,48 @@ pub mod fs;
 pub mod metadata;
 pub mod wdk_build;
 
+use self::error::CargoPathError;
+
 /// Returns the Cargo executable supplied by the invoking environment.
 ///
 /// # Errors
 /// Returns an error if `CARGO` is missing, empty, or not valid Unicode.
-pub fn cargo_path() -> anyhow::Result<String> {
+pub fn cargo_path() -> Result<String, CargoPathError> {
     cargo_path_from_env(std::env::var_os("CARGO"))
 }
 
-fn cargo_path_from_env(value: Option<std::ffi::OsString>) -> anyhow::Result<String> {
+fn cargo_path_from_env(value: Option<std::ffi::OsString>) -> Result<String, CargoPathError> {
     match value {
-        None => Err(anyhow::anyhow!(
-            "CARGO is not set; invoke through `cargo wdk ...`"
-        )),
-        Some(path) if path.is_empty() => Err(anyhow::anyhow!("CARGO is empty")),
+        None => Err(CargoPathError::Missing),
+        Some(path) if path.is_empty() => Err(CargoPathError::Empty),
         Some(path) => path
             .into_string()
-            .map_err(|_| anyhow::anyhow!("CARGO is not valid Unicode")),
+            .map_err(|_| CargoPathError::InvalidUnicode),
     }
 }
 
 pub mod error {
     use std::{io, path::PathBuf, process::Output};
+
+    /// Errors validating the Cargo executable supplied by the environment.
+    #[derive(Debug, PartialEq, Eq, thiserror::Error)]
+    pub enum CargoPathError {
+        #[error("CARGO is not set; invoke through `cargo wdk ...`")]
+        Missing,
+        #[error("CARGO is empty")]
+        Empty,
+        #[error("CARGO is not valid Unicode")]
+        InvalidUnicode,
+    }
+
+    /// Errors resolving Cargo or retrieving project metadata.
+    #[derive(Debug, thiserror::Error)]
+    pub enum MetadataError {
+        #[error(transparent)]
+        CargoPath(#[from] CargoPathError),
+        #[error(transparent)]
+        CargoMetadata(#[from] cargo_metadata::Error),
+    }
 
     /// Error type for `std::process::command` execution failures
     #[derive(Debug, thiserror::Error)]
@@ -102,33 +122,31 @@ pub mod error {
 mod tests {
     use std::{ffi::OsString, os::windows::ffi::OsStringExt};
 
-    use super::cargo_path_from_env;
+    use super::{cargo_path_from_env, error::CargoPathError};
 
     #[test]
     fn missing_cargo_is_an_error() {
+        let error = cargo_path_from_env(None).unwrap_err();
+        assert_eq!(error, CargoPathError::Missing);
         assert_eq!(
-            cargo_path_from_env(None).unwrap_err().to_string(),
+            error.to_string(),
             "CARGO is not set; invoke through `cargo wdk ...`"
         );
     }
 
     #[test]
     fn empty_cargo_is_an_error() {
-        assert_eq!(
-            cargo_path_from_env(Some(OsString::new()))
-                .unwrap_err()
-                .to_string(),
-            "CARGO is empty"
-        );
+        let error = cargo_path_from_env(Some(OsString::new())).unwrap_err();
+        assert_eq!(error, CargoPathError::Empty);
+        assert_eq!(error.to_string(), "CARGO is empty");
     }
 
     #[test]
     fn non_unicode_cargo_path_is_an_error() {
         let path = OsString::from_wide(&[0x0043, 0x003A, 0x005C, 0xD800]);
-        assert_eq!(
-            cargo_path_from_env(Some(path)).unwrap_err().to_string(),
-            "CARGO is not valid Unicode"
-        );
+        let error = cargo_path_from_env(Some(path)).unwrap_err();
+        assert_eq!(error, CargoPathError::InvalidUnicode);
+        assert_eq!(error.to_string(), "CARGO is not valid Unicode");
     }
 
     #[test]

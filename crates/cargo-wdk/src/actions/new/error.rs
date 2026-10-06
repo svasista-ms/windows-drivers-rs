@@ -3,11 +3,13 @@
 //! This module defines error types for new action module.
 use thiserror::Error;
 
-use crate::providers::error::{CommandError, FileError};
+use crate::providers::error::{CargoPathError, CommandError, FileError};
 
 /// Errors for the new action layer
 #[derive(Debug, Error)]
 pub enum NewActionError {
+    #[error(transparent)]
+    CargoPath(#[from] CargoPathError),
     #[error("Error executing cargo new")]
     CargoNewCommand(#[from] CommandError),
     #[error(transparent)]

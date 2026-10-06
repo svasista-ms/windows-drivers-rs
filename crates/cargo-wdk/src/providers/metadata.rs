@@ -15,7 +15,7 @@ use std::path::Path;
 use clap_cargo::Features;
 use mockall::automock;
 
-use super::cargo_path;
+use super::{cargo_path, error::MetadataError};
 
 #[derive(Default)]
 pub struct Metadata {}
@@ -40,28 +40,25 @@ impl Metadata {
     ///
     /// # Returns
     ///
-    /// This function returns a
-    /// `cargo_metadata::Result<cargo_metadata::Metadata>`, which is a
-    /// result type that contains the `Metadata` on success or a
-    /// `cargo_metadata::Error` on failure.
+    /// Returns the project metadata on success.
     ///
     /// # Errors
     ///
-    /// This function will return an error if `CARGO` is missing, empty, or
-    /// not valid Unicode, if the `cargo metadata` command fails to execute,
-    /// or if the specified path is not a valid Cargo project.
+    /// Returns [`MetadataError::CargoPath`] if `CARGO` is missing, empty, or
+    /// not valid Unicode. Returns [`MetadataError::CargoMetadata`] if the
+    /// `cargo metadata` command fails or its output cannot be parsed.
     pub fn get_cargo_metadata_at_path(
         &self,
         working_dir: &Path,
         other_options: Vec<String>,
         features: &Features,
-    ) -> cargo_metadata::Result<cargo_metadata::Metadata> {
-        let cargo = cargo_path().map_err(std::io::Error::other)?;
+    ) -> Result<cargo_metadata::Metadata, MetadataError> {
+        let cargo = cargo_path()?;
         let mut cmd = cargo_metadata::MetadataCommand::new();
         cmd.cargo_path(&cargo)
             .current_dir(working_dir)
             .other_options(other_options);
         features.forward_metadata(&mut cmd);
-        cmd.exec()
+        cmd.exec().map_err(MetadataError::from)
     }
 }

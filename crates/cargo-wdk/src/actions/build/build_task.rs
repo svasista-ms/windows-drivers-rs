@@ -87,6 +87,8 @@ impl<'a> BuildTask<'a> {
     /// # Errors
     /// * `BuildTaskError::EmptyManifestPath` - If the manifest path is empty or
     ///   not a valid unicode
+    /// * `BuildTaskError::CargoPath` - If `CARGO` is missing, empty, or not
+    ///   valid Unicode.
     /// * `BuildTaskError::CargoBuild` - If there is an error running the `cargo
     ///   build` command
     pub fn run(
@@ -123,13 +125,7 @@ impl<'a> BuildTask<'a> {
             .map(std::string::String::as_str)
             .collect::<Vec<&str>>();
 
-        let cargo = cargo_path().map_err(|error| {
-            BuildTaskError::CargoBuild(CommandError::from_io_error(
-                "cargo",
-                &args,
-                std::io::Error::other(error),
-            ))
-        })?;
+        let cargo = cargo_path()?;
 
         // Run cargo build from the provided working directory so that
         // config.toml is respected

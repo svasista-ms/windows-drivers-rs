@@ -13,10 +13,7 @@ use tracing::{debug, error as err, info};
 
 #[double]
 use crate::providers::{exec::CommandExec, fs::Fs};
-use crate::{
-    providers::{cargo_path, error::CommandError},
-    trace,
-};
+use crate::{providers::cargo_path, trace};
 
 /// Action that removes build artifacts produced by the `build` command for a
 /// driver project or emulated workspace.
@@ -76,6 +73,8 @@ impl<'a> CleanAction<'a> {
     /// `Result<(), CleanActionError>`
     ///
     /// # Errors
+    /// * `CleanActionError::CargoPath` - If `CARGO` is missing, empty, or not
+    ///   valid Unicode.
     /// * `CleanActionError::FileIo` - If there is an IO error.
     /// * `CleanActionError::CargoClean` - If there is an error running the
     ///   `cargo clean` command.
@@ -163,13 +162,7 @@ impl<'a> CleanAction<'a> {
         if let Some(flag) = trace::get_cargo_verbose_flags(self.verbosity_level) {
             args.push(flag);
         }
-        let cargo = cargo_path().map_err(|error| {
-            CleanActionError::CargoClean(CommandError::from_io_error(
-                "cargo",
-                &args,
-                std::io::Error::other(error),
-            ))
-        })?;
+        let cargo = cargo_path()?;
         self.command_exec
             .run(&cargo, &args, None, Some(working_dir))
             .map_err(CleanActionError::CargoClean)?;
