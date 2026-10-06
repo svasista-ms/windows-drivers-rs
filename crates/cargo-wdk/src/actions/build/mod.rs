@@ -175,8 +175,8 @@ impl<'a> BuildAction<'a> {
     ///   initializing the package task.
     /// * `BuildActionError::PackageTask` - If there is an error during the
     ///   package task process.
-    /// * `BuildActionError::CargoPath` - If `CARGO` is missing, empty, or not
-    ///   valid Unicode during metadata lookup or architecture detection.
+    /// * `BuildActionError::CargoPath` - If `CARGO` is missing or empty during
+    ///   metadata lookup or architecture detection.
     /// * `BuildActionError::CargoMetadata` - If `cargo metadata` fails to run
     ///   or its output cannot be parsed.
     /// * `BuildActionError::WdkMetadataParse` - Error Parsing WDK metadata from

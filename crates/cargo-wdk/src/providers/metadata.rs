@@ -44,8 +44,8 @@ impl Metadata {
     ///
     /// # Errors
     ///
-    /// Returns [`MetadataError::CargoPath`] if `CARGO` is missing, empty, or
-    /// not valid Unicode. Returns [`MetadataError::CargoMetadata`] if the
+    /// Returns [`MetadataError::CargoPath`] if `CARGO` is missing or empty.
+    /// Returns [`MetadataError::CargoMetadata`] if the
     /// `cargo metadata` command fails or its output cannot be parsed.
     pub fn get_cargo_metadata_at_path(
         &self,

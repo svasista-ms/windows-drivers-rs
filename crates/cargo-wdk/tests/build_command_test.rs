@@ -19,6 +19,34 @@ const X86_64_TARGET_TRIPLE_NAME: &str = "x86_64-pc-windows-msvc";
 const AARCH64_TARGET_TRIPLE_NAME: &str = "aarch64-pc-windows-msvc";
 
 #[test]
+fn build_fails_when_cargo_path_does_not_exist() {
+    let project_path = "tests/kmdf-driver";
+    with_mutex(project_path, || {
+        Command::new("cargo")
+            .args(["metadata", "--no-deps", "--format-version", "1", "--locked"])
+            .current_dir(project_path)
+            .assert()
+            .success();
+
+        let cargo = Path::new(env!("CARGO_MANIFEST_DIR")).join("nonexistent-cargo.exe");
+        assert!(!cargo.exists(), "test Cargo path must not exist");
+        let mut cmd = create_cargo_wdk_cmd("build", Some(&["--locked"]), None, Some(project_path));
+        cmd.env("CARGO", &cargo);
+
+        let assertion = cmd.assert().failure();
+        let stderr = String::from_utf8_lossy(&assertion.get_output().stderr);
+        assert!(
+            stderr.contains("Error running cargo metadata"),
+            "expected a metadata error, got: {stderr}"
+        );
+        assert!(
+            stderr.contains("failed to start `cargo metadata`"),
+            "expected a launch failure for the selected Cargo executable, got: {stderr}"
+        );
+    });
+}
+
+#[test]
 fn mixed_package_kmdf_workspace_builds_successfully() {
     clean_build_and_verify_project(
         "kmdf",

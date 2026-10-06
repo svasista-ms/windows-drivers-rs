@@ -87,8 +87,7 @@ impl<'a> BuildTask<'a> {
     /// # Errors
     /// * `BuildTaskError::EmptyManifestPath` - If the manifest path is empty or
     ///   not a valid unicode
-    /// * `BuildTaskError::CargoPath` - If `CARGO` is missing, empty, or not
-    ///   valid Unicode.
+    /// * `BuildTaskError::CargoPath` - If `CARGO` is missing or empty.
     /// * `BuildTaskError::CargoBuild` - If there is an error running the `cargo
     ///   build` command
     pub fn run(
@@ -261,7 +260,10 @@ mod tests {
                 let working_dir = working_dir_opt
                     .expect("working directory must be provided when running cargo build");
                 let matches_working_dir = working_dir == expected_working_dir.as_path();
-                command == expected_cargo && env.is_none() && matches_args && matches_working_dir
+                command.as_ref() == Path::new(&expected_cargo)
+                    && env.is_none()
+                    && matches_args
+                    && matches_working_dir
             })
             .return_once(move |_, _, _, _| {
                 Ok(Output {
@@ -376,7 +378,7 @@ mod tests {
         let expected_cargo = std::env::var_os("CARGO").expect("run tests through cargo test");
         mock.expect_run()
             .withf(move |command, args, _env, _wd| {
-                command == expected_cargo && args.contains(&"--locked")
+                command.as_ref() == Path::new(&expected_cargo) && args.contains(&"--locked")
             })
             .return_once(move |_, _, _, _| {
                 Ok(Output {
@@ -415,7 +417,7 @@ mod tests {
         let expected_cargo = std::env::var_os("CARGO").expect("run tests through cargo test");
         mock.expect_run()
             .withf(move |command, args, _env, _working_dir_opt| {
-                command == expected_cargo
+                command.as_ref() == Path::new(&expected_cargo)
                     && args.contains(&"--all-features")
                     && args.contains(&"--no-default-features")
                     && args.windows(2).any(|w| w == ["--features", "foo"])

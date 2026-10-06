@@ -1704,11 +1704,7 @@ pub fn given_a_workspace_only_with_non_driver_projects_when_cwd_is_workspace_mem
 ////////////////////////////////////////////////////////////////////////////////
 #[test]
 fn given_invalid_cargo_configuration_when_getting_metadata_then_cargo_path_error_is_preserved() {
-    for error in [
-        CargoPathError::Missing,
-        CargoPathError::Empty,
-        CargoPathError::InvalidUnicode,
-    ] {
+    for error in [CargoPathError::Missing, CargoPathError::Empty] {
         let message = error.to_string();
         let cwd = PathBuf::from(r"C:\tmp");
         let mut test_build_action = TestBuildAction::new(cwd.clone(), None, None, false);
@@ -2260,7 +2256,7 @@ impl TestBuildAction {
         self.mock_run_command
             .expect_run()
             .withf(move |command, args, env, working_dir| {
-                command == expected_cargo
+                command.as_ref() == Path::new(&expected_cargo)
                     && env.is_none()
                     && *working_dir == Some(expected_working_dir.as_path())
                     && args == expected_cargo_build_args
@@ -2297,7 +2293,7 @@ impl TestBuildAction {
         self.mock_run_command
             .expect_run()
             .withf(move |command, args, env, working_dir| {
-                command == expected_cargo
+                command.as_ref() == Path::new(&expected_cargo)
                     && env.is_none()
                     && args == expected_args
                     && working_dir.is_some_and(|d| d == expected_working_dir.as_path())
@@ -2563,17 +2559,19 @@ impl TestBuildAction {
             self.mock_run_command
                 .expect_run()
                 .withf(
-                    move |command: &str,
+                    move |command: &dyn AsRef<Path>,
                           args: &[&str],
                           _env_vars: &Option<&HashMap<&str, &str>>,
                           _working_dir: &Option<&Path>|
                           -> bool {
-                        println!("command: {command}, args: {args:?}");
+                        let command = command.as_ref();
+                        println!("command: {command:?}, args: {args:?}");
                         println!(
                             "expected_command: {expected_stampinf_command}, expected_args: \
                              {expected_stampinf_args:?}"
                         );
-                        command == expected_stampinf_command && args == expected_stampinf_args
+                        command == Path::new(expected_stampinf_command)
+                            && args == expected_stampinf_args
                     },
                 )
                 .once()
@@ -2627,17 +2625,18 @@ impl TestBuildAction {
         self.mock_run_command
             .expect_run()
             .withf(
-                move |command: &str,
+                move |command: &dyn AsRef<Path>,
                       args: &[&str],
                       _env_vars: &Option<&HashMap<&str, &str>>,
                       _working_dir: &Option<&Path>|
                       -> bool {
-                    println!("command: {command}, args: {args:?}");
+                    let command = command.as_ref();
+                    println!("command: {command:?}, args: {args:?}");
                     println!(
                         "expected_command: {expected_inf2cat_command}, expected_args: \
                          {expected_inf2cat_args:?}"
                     );
-                    command == expected_inf2cat_command && args == expected_inf2cat_args
+                    command == Path::new(expected_inf2cat_command) && args == expected_inf2cat_args
                 },
             )
             .once()
@@ -2667,12 +2666,13 @@ impl TestBuildAction {
         self.mock_run_command
             .expect_run()
             .withf(
-                move |command: &str,
+                move |command: &dyn AsRef<Path>,
                       args: &[&str],
                       _env_vars: &Option<&HashMap<&str, &str>>,
                       _working_dir: &Option<&Path>|
                       -> bool {
-                    command == expected_certmgr_command && args == expected_certmgr_args
+                    command.as_ref() == Path::new(expected_certmgr_command)
+                        && args == expected_certmgr_args
                 },
             )
             .returning(move |_, _, _, _| match override_output.clone() {
@@ -2717,12 +2717,13 @@ impl TestBuildAction {
         self.mock_run_command
             .expect_run()
             .withf(
-                move |command: &str,
+                move |command: &dyn AsRef<Path>,
                       args: &[&str],
                       _env_vars: &Option<&HashMap<&str, &str>>,
                       _working_dir: &Option<&Path>|
                       -> bool {
-                    command == expected_certmgr_command && args == expected_certmgr_args
+                    command.as_ref() == Path::new(expected_certmgr_command)
+                        && args == expected_certmgr_args
                 },
             )
             .once()
@@ -2766,12 +2767,13 @@ impl TestBuildAction {
         self.mock_run_command
             .expect_run()
             .withf(
-                move |command: &str,
+                move |command: &dyn AsRef<Path>,
                       args: &[&str],
                       _env_vars: &Option<&HashMap<&str, &str>>,
                       _working_dir: &Option<&Path>|
                       -> bool {
-                    command == expected_makecert_command && args == expected_makecert_args
+                    command.as_ref() == Path::new(expected_makecert_command)
+                        && args == expected_makecert_args
                 },
             )
             .once()
@@ -2827,13 +2829,14 @@ impl TestBuildAction {
         self.mock_run_command
             .expect_run_with_redaction()
             .withf(
-                move |command: &str,
+                move |command: &dyn AsRef<Path>,
                       args: &[&str],
                       _redaction_indices: &[usize],
                       _env_vars: &Option<&HashMap<&str, &str>>,
                       _working_dir: &Option<&Path>|
                       -> bool {
-                    command == expected_signtool_command && args == expected_signtool_args
+                    command.as_ref() == Path::new(expected_signtool_command)
+                        && args == expected_signtool_args
                 },
             )
             .once()
@@ -2889,13 +2892,14 @@ impl TestBuildAction {
         self.mock_run_command
             .expect_run_with_redaction()
             .withf(
-                move |command: &str,
+                move |command: &dyn AsRef<Path>,
                       args: &[&str],
                       _redaction_indices: &[usize],
                       _env_vars: &Option<&HashMap<&str, &str>>,
                       _working_dir: &Option<&Path>|
                       -> bool {
-                    command == expected_signtool_command && args == expected_signtool_args
+                    command.as_ref() == Path::new(expected_signtool_command)
+                        && args == expected_signtool_args
                 },
             )
             .once()
@@ -2943,12 +2947,13 @@ impl TestBuildAction {
         self.mock_run_command
             .expect_run()
             .withf(
-                move |command: &str,
+                move |command: &dyn AsRef<Path>,
                       args: &[&str],
                       _env_vars: &Option<&HashMap<&str, &str>>,
                       _working_dir: &Option<&Path>|
                       -> bool {
-                    command == expected_signtool_command && args == expected_signtool_verify_args
+                    command.as_ref() == Path::new(expected_signtool_command)
+                        && args == expected_signtool_verify_args
                 },
             )
             .once()
@@ -2996,12 +3001,13 @@ impl TestBuildAction {
         self.mock_run_command
             .expect_run()
             .withf(
-                move |command: &str,
+                move |command: &dyn AsRef<Path>,
                       args: &[&str],
                       _env_vars: &Option<&HashMap<&str, &str>>,
                       _working_dir: &Option<&Path>|
                       -> bool {
-                    command == expected_signtool_command && args == expected_signtool_verify_args
+                    command.as_ref() == Path::new(expected_signtool_command)
+                        && args == expected_signtool_verify_args
                 },
             )
             .once()
@@ -3056,12 +3062,13 @@ impl TestBuildAction {
         self.mock_run_command
             .expect_run()
             .withf(
-                move |command: &str,
+                move |command: &dyn AsRef<Path>,
                       args: &[&str],
                       _env_vars: &Option<&HashMap<&str, &str>>,
                       _working_dir: &Option<&Path>|
                       -> bool {
-                    command == expected_infverif_command && args == expected_infverif_args
+                    command.as_ref() == Path::new(expected_infverif_command)
+                        && args == expected_infverif_args
                 },
             )
             .once()
@@ -3612,7 +3619,7 @@ mod get_target_dir_from_output {
 
 mod get_target_arch_from_cargo_rustc {
     use std::{
-        path::PathBuf,
+        path::{Path, PathBuf},
         process::{ExitStatus, Output},
     };
 
@@ -3753,7 +3760,7 @@ mod get_target_arch_from_cargo_rustc {
             .mock_run_command
             .expect_run()
             .withf(move |command, args, env, working_dir| {
-                command == expected_cargo
+                command.as_ref() == Path::new(&expected_cargo)
                     && env.is_none()
                     && args == expected_args
                     && matches!(working_dir, Some(dir) if *dir == cwd.as_path())

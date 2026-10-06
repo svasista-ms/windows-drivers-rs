@@ -73,8 +73,7 @@ impl<'a> CleanAction<'a> {
     /// `Result<(), CleanActionError>`
     ///
     /// # Errors
-    /// * `CleanActionError::CargoPath` - If `CARGO` is missing, empty, or not
-    ///   valid Unicode.
+    /// * `CleanActionError::CargoPath` - If `CARGO` is missing or empty.
     /// * `CleanActionError::FileIo` - If there is an IO error.
     /// * `CleanActionError::CargoClean` - If there is an error running the
     ///   `cargo clean` command.
@@ -234,7 +233,7 @@ mod tests {
         let expected_cargo = std::env::var_os("CARGO").expect("run tests through cargo test");
         exec.expect_run()
             .withf(move |command, args, env, working_dir| {
-                command == expected_cargo
+                command.as_ref() == Path::new(&expected_cargo)
                     && env.is_none()
                     && args == ["clean"]
                     && *working_dir == Some(dir.as_path())

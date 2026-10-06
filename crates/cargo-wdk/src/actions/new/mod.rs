@@ -113,8 +113,7 @@ impl<'a> NewAction<'a> {
     ///
     /// # Errors
     ///
-    /// * `NewActionError::CargoPath` - If `CARGO` is missing, empty, or not
-    ///   valid Unicode.
+    /// * `NewActionError::CargoPath` - If `CARGO` is missing or empty.
     /// * `NewActionError::CargoNewCommand` - If there is an error running the
     ///   `cargo new` command.
     /// * `NewActionError::TemplateNotFound` - If a template file matching the
@@ -150,8 +149,7 @@ impl<'a> NewAction<'a> {
     ///
     /// # Errors
     ///
-    /// * `NewActionError::CargoPath` - If `CARGO` is missing, empty, or not
-    ///   valid Unicode.
+    /// * `NewActionError::CargoPath` - If `CARGO` is missing or empty.
     /// * `NewActionError::CargoNewCommand` - If there is an error running the
     ///   `cargo new` command.
     fn run_cargo_new(&self) -> Result<(), NewActionError> {
@@ -720,7 +718,7 @@ mod tests {
             self.mock_exec
                 .expect_run()
                 .withf(move |command, args, env, working_dir| {
-                    let matched = command == expected_cargo
+                    let matched = command.as_ref() == Path::new(&expected_cargo)
                         && env.is_none()
                         && working_dir.is_none()
                         && args.len() >= 3
