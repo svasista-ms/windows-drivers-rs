@@ -17,8 +17,8 @@ pub enum BuildActionError {
     NotAbsolute(PathBuf, #[source] io::Error),
     #[error(transparent)]
     WdkBuildConfig(#[from] wdk_build::ConfigError),
-    #[error("Error Parsing Cargo.toml, not a valid rust project/workspace")]
-    CargoMetadataParse(#[from] cargo_metadata::Error),
+    #[error("Error running cargo metadata")]
+    CargoMetadata(#[from] cargo_metadata::Error),
     #[error("Error Parsing WDK metadata from Cargo.toml, not a valid driver project/workspace")]
     WdkMetadataParse(#[from] wdk_build::metadata::TryFromCargoMetadataError),
     #[error(transparent)]

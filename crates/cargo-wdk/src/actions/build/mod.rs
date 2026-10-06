@@ -177,8 +177,8 @@ impl<'a> BuildAction<'a> {
     ///   package task process.
     /// * `BuildActionError::CargoPath` - If `CARGO` is missing, empty, or not
     ///   valid Unicode during metadata lookup or architecture detection.
-    /// * `BuildActionError::CargoMetadataParse` - If it is not a valid rust
-    ///   project/workspace and error parsing Cargo.toml.
+    /// * `BuildActionError::CargoMetadata` - If `cargo metadata` fails to run
+    ///   or its output cannot be parsed.
     /// * `BuildActionError::WdkMetadataParse` - Error Parsing WDK metadata from
     ///   Cargo.toml, not a valid driver project/workspace.
     /// * `BuildActionError::WdkBuildConfig` - If there is an error setting up
@@ -388,7 +388,7 @@ impl<'a> BuildAction<'a> {
             .get_cargo_metadata_at_path(&working_dir_path_trimmed, other_options, self.features)
             .map_err(|error| match error {
                 MetadataError::CargoPath(error) => BuildActionError::CargoPath(error),
-                MetadataError::CargoMetadata(error) => BuildActionError::CargoMetadataParse(error),
+                MetadataError::CargoMetadata(error) => BuildActionError::CargoMetadata(error),
             })?;
         Ok(cargo_metadata)
     }

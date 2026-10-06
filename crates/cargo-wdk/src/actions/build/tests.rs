@@ -1750,9 +1750,10 @@ fn given_a_metadata_io_error_when_getting_metadata_then_cargo_metadata_error_is_
 
     assert!(matches!(
         error,
-        BuildActionError::CargoMetadataParse(cargo_metadata::Error::Io(ref source))
+        BuildActionError::CargoMetadata(cargo_metadata::Error::Io(ref source))
             if source.kind() == std::io::ErrorKind::NotFound
     ));
+    assert_eq!(error.to_string(), "Error running cargo metadata");
     assert!(
         format!("{:#}", anyhow::Error::new(error)).contains("selected Cargo executable is missing")
     );
