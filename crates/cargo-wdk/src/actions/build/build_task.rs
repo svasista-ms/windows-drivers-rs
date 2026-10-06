@@ -17,7 +17,10 @@ use wdk_build::CpuArchitecture;
 use super::{Profile, error::BuildTaskError, features_to_cargo_args, to_target_triple};
 #[double]
 use crate::providers::exec::CommandExec;
-use crate::{providers::error::CommandError, trace};
+use crate::{
+    providers::{cargo_path, error::CommandError},
+    trace,
+};
 
 /// Parameters for constructing a [`BuildTask`].
 pub struct BuildTaskParams<'a> {
@@ -120,11 +123,19 @@ impl<'a> BuildTask<'a> {
             .map(std::string::String::as_str)
             .collect::<Vec<&str>>();
 
+        let cargo = cargo_path().map_err(|error| {
+            BuildTaskError::CargoBuild(CommandError::from_io_error(
+                "cargo",
+                &args,
+                std::io::Error::other(error),
+            ))
+        })?;
+
         // Run cargo build from the provided working directory so that
         // config.toml is respected
         let output = self
             .command_exec
-            .run_cargo(&args, Some(self.params.working_dir))
+            .run(&cargo, &args, None, Some(self.params.working_dir))
             .map_err(|mut err| {
                 // Drop stdout from CommandFailed so the noisy
                 // --message-format=json-render-diagnostics output isn't bubbled
@@ -243,8 +254,9 @@ mod tests {
         let expected_stdout_for_mock = expected_stdout.clone();
 
         let mut mock = MockCommandExec::new();
-        mock.expect_run_cargo()
-            .withf(move |args, working_dir_opt| {
+        let expected_cargo = std::env::var_os("CARGO").expect("run tests through cargo test");
+        mock.expect_run()
+            .withf(move |command, args, env, working_dir_opt| {
                 let matches_args = args.len() == expected_args.len()
                     && args
                         .iter()
@@ -253,9 +265,9 @@ mod tests {
                 let working_dir = working_dir_opt
                     .expect("working directory must be provided when running cargo build");
                 let matches_working_dir = working_dir == expected_working_dir.as_path();
-                matches_args && matches_working_dir
+                command == expected_cargo && env.is_none() && matches_args && matches_working_dir
             })
-            .return_once(move |_, _| {
+            .return_once(move |_, _, _, _| {
                 Ok(Output {
                     status: ExitStatus::default(),
                     stdout: expected_stdout_for_mock,
@@ -290,7 +302,7 @@ mod tests {
     fn run_returns_command_failed_error_with_empty_stdout_when_cargo_build_exits_nonzero() {
         let working_dir = PathBuf::from("C:/abs/driver");
         let mut mock = MockCommandExec::new();
-        mock.expect_run_cargo().return_once(|_, _| {
+        mock.expect_run().return_once(|_, _, _, _| {
             let failure_output = Output {
                 status: ExitStatus::from_raw(1),
                 stdout: b"error".to_vec(),
@@ -330,7 +342,7 @@ mod tests {
     fn run_returns_io_error_when_cargo_build_command_invocation_fails() {
         let working_dir = PathBuf::from("C:/abs/driver");
         let mut mock = MockCommandExec::new();
-        mock.expect_run_cargo().return_once(|_, _| {
+        mock.expect_run().return_once(|_, _, _, _| {
             Err(CommandError::from_io_error(
                 "cargo",
                 &["build"],
@@ -365,9 +377,12 @@ mod tests {
         let expected_stdout_for_mock = expected_stdout.clone();
 
         let mut mock = MockCommandExec::new();
-        mock.expect_run_cargo()
-            .withf(|args, _wd| args.contains(&"--locked"))
-            .return_once(move |_, _| {
+        let expected_cargo = std::env::var_os("CARGO").expect("run tests through cargo test");
+        mock.expect_run()
+            .withf(move |command, args, _env, _wd| {
+                command == expected_cargo && args.contains(&"--locked")
+            })
+            .return_once(move |_, _, _, _| {
                 Ok(Output {
                     status: ExitStatus::default(),
                     stdout: expected_stdout_for_mock,
@@ -401,14 +416,16 @@ mod tests {
         let expected_stdout_for_mock = expected_stdout.clone();
 
         let mut mock = MockCommandExec::new();
-        mock.expect_run_cargo()
-            .withf(move |args, _working_dir_opt| {
-                args.contains(&"--all-features")
+        let expected_cargo = std::env::var_os("CARGO").expect("run tests through cargo test");
+        mock.expect_run()
+            .withf(move |command, args, _env, _working_dir_opt| {
+                command == expected_cargo
+                    && args.contains(&"--all-features")
                     && args.contains(&"--no-default-features")
                     && args.windows(2).any(|w| w == ["--features", "foo"])
                     && args.windows(2).any(|w| w == ["--features", "bar"])
             })
-            .return_once(move |_, _| {
+            .return_once(move |_, _, _, _| {
                 Ok(Output {
                     status: ExitStatus::default(),
                     stdout: expected_stdout_for_mock,

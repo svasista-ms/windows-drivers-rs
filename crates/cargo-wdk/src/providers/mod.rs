@@ -14,17 +14,23 @@ pub mod fs;
 pub mod metadata;
 pub mod wdk_build;
 
-fn cargo_path() -> anyhow::Result<std::path::PathBuf> {
+/// Returns the Cargo executable supplied by the invoking environment.
+///
+/// # Errors
+/// Returns an error if `CARGO` is missing, empty, or not valid Unicode.
+pub fn cargo_path() -> anyhow::Result<String> {
     cargo_path_from_env(std::env::var_os("CARGO"))
 }
 
-fn cargo_path_from_env(value: Option<std::ffi::OsString>) -> anyhow::Result<std::path::PathBuf> {
+fn cargo_path_from_env(value: Option<std::ffi::OsString>) -> anyhow::Result<String> {
     match value {
         None => Err(anyhow::anyhow!(
             "CARGO is not set; invoke through `cargo wdk ...`"
         )),
         Some(path) if path.is_empty() => Err(anyhow::anyhow!("CARGO is empty")),
-        Some(path) => Ok(path.into()),
+        Some(path) => path
+            .into_string()
+            .map_err(|_| anyhow::anyhow!("CARGO is not valid Unicode")),
     }
 }
 
@@ -94,7 +100,7 @@ pub mod error {
 
 #[cfg(test)]
 mod tests {
-    use std::{ffi::OsString, os::windows::ffi::OsStringExt, path::PathBuf};
+    use std::{ffi::OsString, os::windows::ffi::OsStringExt};
 
     use super::cargo_path_from_env;
 
@@ -117,31 +123,18 @@ mod tests {
     }
 
     #[test]
-    fn cargo_path_is_preserved() {
-        let path = OsString::from(r"C:\selected toolchain\bin\cargo.exe");
-        assert_eq!(
-            cargo_path_from_env(Some(path.clone())).unwrap(),
-            PathBuf::from(path)
-        );
-    }
-
-    #[test]
-    fn nonexistent_cargo_path_is_not_replaced() {
-        let dir = assert_fs::TempDir::new().unwrap();
-        let path = dir.join("missing-cargo.exe");
-        assert!(!path.exists());
-        assert_eq!(
-            cargo_path_from_env(Some(path.clone().into_os_string())).unwrap(),
-            path
-        );
-    }
-
-    #[test]
-    fn non_unicode_cargo_path_is_preserved() {
+    fn non_unicode_cargo_path_is_an_error() {
         let path = OsString::from_wide(&[0x0043, 0x003A, 0x005C, 0xD800]);
         assert_eq!(
-            cargo_path_from_env(Some(path.clone())).unwrap(),
-            PathBuf::from(path)
+            cargo_path_from_env(Some(path)).unwrap_err().to_string(),
+            "CARGO is not valid Unicode"
         );
+    }
+
+    #[test]
+    fn cargo_path_is_preserved() {
+        let path = r"C:\nonexistent cargo-wdk test toolchain\bin\cargo.exe";
+        assert!(!std::path::Path::new(path).exists());
+        assert_eq!(cargo_path_from_env(Some(path.into())).unwrap(), path);
     }
 }

@@ -33,6 +33,7 @@ use wdk_build::{
     metadata::{TryFromCargoMetadataError, Wdk},
 };
 
+use crate::providers::{cargo_path, error::CommandError};
 #[double]
 use crate::providers::{exec::CommandExec, fs::Fs, metadata::Metadata, wdk_build::WdkBuild};
 
@@ -585,7 +586,12 @@ impl<'a> BuildAction<'a> {
         let feature_args = features_to_cargo_args(self.features);
         args.extend(feature_args.iter().map(String::as_str));
         args.extend(["--", "--print", "cfg"]);
-        let output = self.command_exec.run_cargo(&args, Some(working_dir))?;
+        let cargo = cargo_path().map_err(|error| {
+            CommandError::from_io_error("cargo", &args, std::io::Error::other(error))
+        })?;
+        let output = self
+            .command_exec
+            .run(&cargo, &args, None, Some(working_dir))?;
         let stdout = std::str::from_utf8(&output.stdout)
             .map_err(|_| BuildActionError::CannotDetectTargetArch)?;
         let arch = stdout.lines().find_map(|line| {

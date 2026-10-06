@@ -22,7 +22,10 @@ use tracing::{debug, info};
 
 #[double]
 use crate::providers::{exec::CommandExec, fs::Fs};
-use crate::trace;
+use crate::{
+    providers::{cargo_path, error::CommandError},
+    trace,
+};
 
 pub const KMDF_STR: &str = "kmdf";
 pub const UMDF_STR: &str = "umdf";
@@ -157,7 +160,14 @@ impl<'a> NewAction<'a> {
         if let Some(flag) = trace::get_cargo_verbose_flags(self.verbosity_level) {
             args.push(flag);
         }
-        if let Err(e) = self.command_exec.run_cargo(&args, None) {
+        let cargo = cargo_path().map_err(|error| {
+            NewActionError::CargoNewCommand(CommandError::from_io_error(
+                "cargo",
+                &args,
+                std::io::Error::other(error),
+            ))
+        })?;
+        if let Err(e) = self.command_exec.run(&cargo, &args, None, None) {
             return Err(NewActionError::CargoNewCommand(e));
         }
         Ok(())
@@ -711,10 +721,14 @@ mod tests {
             expected_flag: Option<String>,
         ) -> Self {
             let expected_path = self.path.to_string_lossy().to_string();
+            let expected_cargo = std::env::var_os("CARGO").expect("run tests through cargo test");
             self.mock_exec
-                .expect_run_cargo()
-                .withf(move |args, _| {
-                    let matched = args.len() >= 3
+                .expect_run()
+                .withf(move |command, args, env, working_dir| {
+                    let matched = command == expected_cargo
+                        && env.is_none()
+                        && working_dir.is_none()
+                        && args.len() >= 3
                         && args[0] == "new"
                         && args[1] == "--lib"
                         && args[2] == expected_path;
@@ -723,7 +737,7 @@ mod tests {
                         matched && args.len() > 3 && args[3] == flag.as_str()
                     })
                 })
-                .returning(move |_, _| match override_output.clone() {
+                .returning(move |_, _, _, _| match override_output.clone() {
                     Some(output) => match output.status.code() {
                         Some(0) => Ok(Output {
                             status: ExitStatus::from_raw(0),

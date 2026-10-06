@@ -2195,13 +2195,18 @@ impl TestBuildAction {
             stdout: vec![],
             stderr: vec![],
         });
+        let expected_cargo = std::env::var_os("CARGO").expect("run tests through cargo test");
+        let expected_working_dir = cwd.to_path_buf();
         self.mock_run_command
-            .expect_run_cargo()
-            .withf(move |args: &[&str], _working_dir: &Option<&Path>| -> bool {
-                args == expected_cargo_build_args
+            .expect_run()
+            .withf(move |command, args, env, working_dir| {
+                command == expected_cargo
+                    && env.is_none()
+                    && *working_dir == Some(expected_working_dir.as_path())
+                    && args == expected_cargo_build_args
             })
             .once()
-            .returning(move |_, _| Ok(expected_output.clone()));
+            .returning(move |_, _, _, _| Ok(expected_output.clone()));
         self
     }
 
@@ -2228,14 +2233,17 @@ impl TestBuildAction {
         expected_args.push("--print".to_string());
         expected_args.push("cfg".to_string());
         let expected_args_for_err = expected_args.clone();
+        let expected_cargo = std::env::var_os("CARGO").expect("run tests through cargo test");
         self.mock_run_command
-            .expect_run_cargo()
-            .withf(move |args: &[&str], working_dir: &Option<&Path>| {
-                args == expected_args
+            .expect_run()
+            .withf(move |command, args, env, working_dir| {
+                command == expected_cargo
+                    && env.is_none()
+                    && args == expected_args
                     && working_dir.is_some_and(|d| d == expected_working_dir.as_path())
             })
             .once()
-            .returning(move |_, _| match override_output.clone() {
+            .returning(move |_, _, _, _| match override_output.clone() {
                 Some(output) => {
                     if output.status.code() == Some(0) {
                         Ok(Output {
@@ -3544,7 +3552,7 @@ mod get_target_dir_from_output {
 
 mod get_target_arch_from_cargo_rustc {
     use std::{
-        path::{Path, PathBuf},
+        path::PathBuf,
         process::{ExitStatus, Output},
     };
 
@@ -3680,14 +3688,18 @@ mod get_target_arch_from_cargo_rustc {
         }
         expected_args.extend(features_to_cargo_args(&test_build_action.features));
         expected_args.extend(["--", "--print", "cfg"].map(String::from));
+        let expected_cargo = std::env::var_os("CARGO").expect("run tests through cargo test");
         test_build_action
             .mock_run_command
-            .expect_run_cargo()
-            .withf(move |args: &[&str], working_dir: &Option<&Path>| -> bool {
-                args == expected_args && matches!(working_dir, Some(dir) if *dir == cwd.as_path())
+            .expect_run()
+            .withf(move |command, args, env, working_dir| {
+                command == expected_cargo
+                    && env.is_none()
+                    && args == expected_args
+                    && matches!(working_dir, Some(dir) if *dir == cwd.as_path())
             })
             .once()
-            .returning(move |_, _| {
+            .returning(move |_, _, _, _| {
                 Ok(Output {
                     status: ExitStatus::default(),
                     stdout: stdout.clone(),
